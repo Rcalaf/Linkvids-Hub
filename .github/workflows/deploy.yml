@@ -1,0 +1,76 @@
+name: CI/CD Pipeline LinkVids
+
+on:
+  push:
+    branches: [ "main" ] # Runs whenever you push to main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build and Push Backend
+      - name: Build and Push Server
+        uses: docker/build-push-action@v4
+        with:
+          context: ./server
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/linkvids-server:latest
+
+      # Build and Push Frontend
+      - name: Build and Push Client
+        uses: docker/build-push-action@v4
+        with:
+          context: ./client
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/linkvids-client:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Copy the production compose file to the server
+      - name: Copy Compose File
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "/app/linkvids"
+
+      # SSH into server and restart containers
+      - name: Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /app/linkvids
+            
+            # 1. Create .env file dynamically from GitHub Secret
+            echo "${{ secrets.ENV_FILE }}" > server/.env
+
+            # 2. Export Username for docker-compose variable substitution
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+
+            # 3. Pull latest images
+            docker-compose -f docker-compose.prod.yml pull
+
+            # 4. Restart containers
+            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # 5. Clean up old images to save disk space
+            docker image prune -f

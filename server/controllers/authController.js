@@ -5,6 +5,9 @@ const LinkVidsAdmin = require('../models/LinkVidsAdmin');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+const { sendEmail } = require('../services/emailService');
+const welcomeEmail = require('../templates/email/welcomeEmail');
+
 // 1. LOGIN LOGIC (Unified)
 const handleLogin = async (req, res) => {
     const { email, password } = req.body;
@@ -83,6 +86,19 @@ const registerCollaborator = async (req, res) => {
             collaboratorType: collaboratorType, // e.g., 'ugc-creator'
             groupSpecificAttributes: otherData // Store dynamic fields here
         });
+
+        // const loginUrl = `${process.env.CLIENT_URL}/login`;
+        // const emailHtml = welcomeEmail(newUser.name, loginUrl);
+
+        // try {
+        //     await sendEmail({
+        //         to: newUser.email,
+        //         subject: "Welcome to LinkVids!",
+        //         html: emailHtml
+        //     });
+        // } catch (error) {
+        //     console.error("Email failed:", error);
+        // }
 
         res.status(201).json({ success: true, message: `Collaborator (${collaboratorType}) registered!` });
     } catch (err) {

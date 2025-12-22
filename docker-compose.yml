@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # --- Backend Service ---
+  server:
+    build: ./server
+    container_name: linkvids-server
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env  # Reads your existing .env file
+    environment:
+      - PORT=5000
+      # Override DB host if using a containerized Mongo (optional)
+      # - MONGO_URI=mongodb://mongo:27017/linkvids 
+    depends_on:
+      - mongo  # Remove if using MongoDB Atlas
+
+  # --- Frontend Service ---
+  client:
+    build: ./client
+    container_name: linkvids-client
+    restart: always
+    ports:
+      - "80:80"    # Maps port 80 (HTTP) on server to port 80 in container
+    depends_on:
+      - server
+
+  # --- Database (Optional) ---
+  # Keep this if you want a local DB. Remove if using Atlas.
+  mongo:
+    image: mongo:latest
+    container_name: linkvids-mongo
+    restart: always
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+
+volumes:
+  mongo-data:

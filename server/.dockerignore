@@ -1,0 +1,8 @@
+node_modules
+client/node_modules
+server/node_modules
+.git
+.env
+dist
+build
+npm-debug.log

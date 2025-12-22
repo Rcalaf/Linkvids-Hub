@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  server:
+    # 🚨 Points to Docker Hub instead of local build
+    image: ${DOCKERHUB_USERNAME}/linkvids-server:latest
+    container_name: linkvids-server
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env
+
+  client:
+    image: ${DOCKERHUB_USERNAME}/linkvids-client:latest
+    container_name: linkvids-client
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - server
