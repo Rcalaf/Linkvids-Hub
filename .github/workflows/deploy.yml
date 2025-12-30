@@ -33,8 +33,8 @@ jobs:
       - name: Copy Files to Server
         uses: appleboy/scp-action@v0.1.4
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           source: "server-image.tar.gz,client-image.tar.gz,docker-compose.prod.yml"
           target: "/home/hub.linkvids"
@@ -43,8 +43,8 @@ jobs:
       - name: Deploy on Server
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           script: |
             cd /home/hub.linkvids
