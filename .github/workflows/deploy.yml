@@ -52,7 +52,9 @@ jobs:
       # 3. Build Client Image
       - name: Build Client Docker Image
         run: |
-          docker build -t linkvids-client:latest ./client
+          docker build \
+          --build-arg VITE_API_URL=https://hub-api.linkvids.io/api \
+          -t linkvids-client:latest ./client
 
       # 4. Save Images to Tarballs (Compressing to save bandwidth)
       - name: Save Docker Images
