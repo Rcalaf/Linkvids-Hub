@@ -11,7 +11,7 @@ const corsOptions = {
         }
     },
     // allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
-    // preflightContinue: false,
+    preflightContinue: false,
     credentials: true,
     // maxAge:600,
     optionsSuccessStatus: 200
