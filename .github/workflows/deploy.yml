@@ -75,7 +75,7 @@ jobs:
 
             # B. Create .env file from GitHub Secrets (Secure)
             mkdir -p server
-            echo "${{ secrets.ENV_FILE }}" > server/.env
+            mv .env.production server/.env
 
             # C. Restart Containers
             # We explicitly tell compose to use the images we just loaded
