@@ -30,7 +30,7 @@ const seedDatabase = async () => {
 
             const adminUser = new LinkVidsAdmin({
                 name: 'Super Admin',
-                email: 'admin@linkvids.com',
+                email: 'admin@linkvids.io',
                 password: hashedPassword,
                 permissionLevel: 'SuperAdmin',
                 userType: 'LinkVidsAdmin',

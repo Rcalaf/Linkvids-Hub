@@ -1,9 +1,10 @@
 // client/src/api/axiosConfig.js
 import axios from 'axios';
 
+const API_URL = 'https://hub-api.linkvids.io/api';
 // Create a reusable Axios instance
 const api = axios.create({
-    baseURL: '/api', // Vite proxy handles routing to http://localhost:3500/api
+    baseURL: API_URL, //'/api', 
     headers: {
         'Content-Type': 'application/json',
     },
