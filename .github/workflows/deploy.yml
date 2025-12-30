@@ -19,23 +19,36 @@ jobs:
           docker build -t linkvids-server:latest ./server
       
       - name: Create Env File
-        run: |
-          touch .env.production
-          echo "NODE_ENV=production" > .env.production
-          echo "PORT=3500" >> .env.production
-          echo "DATABASE_URI=\"${{ secrets.DATABASE_URI }}\"" >> .env.production
-          echo "ACCESS_TOKEN_SECRET=${{ secrets.ACCESS_TOKEN_SECRET }}" >> .env.production
-          echo "REFRESH_TOKEN_SECRET=${{ secrets.REFRESH_TOKEN_SECRET }}" >> .env.production
-          echo "CLIENT_URL=${{ secrets.CLIENT_URL }}" >> .env.production
-          echo "OVH_ENDPOINT=${{ secrets.OVH_ENDPOINT }}" >> .env.production
-          echo "OVH_REGION=${{ secrets.OVH_REGION }}" >> .env.production
-          echo "OVH_BUCKET_NAME=${{ secrets.OVH_BUCKET_NAME }}" >> .env.production
-          echo "OVH_ACCESS_KEY=${{ secrets.OVH_ACCESS_KEY }}" >> .env.production
-          echo "OVH_SECRET_KEY=${{ secrets.OVH_SECRET_KEY }}" >> .env.production
-          echo "EMAIL_USER=\"${{ secrets.EMAIL_USER }}\"" >> .env.production
-          echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> .env.production
-        # echo "EMAIL_FROM=\"${{ secrets.EMAIL_FROM }}\"" >> .env.production
-
+          env:
+            VAL_DATABASE_URI: ${{ secrets.DATABASE_URI }}
+            VAL_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN_SECRET }}
+            VAL_REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN_SECRET }}
+            VAL_CLIENT_URL: ${{ secrets.CLIENT_URL }}
+            VAL_OVH_ENDPOINT: ${{ secrets.OVH_ENDPOINT }}
+            VAL_OVH_REGION: ${{ secrets.OVH_REGION }}
+            VAL_OVH_BUCKET: ${{ secrets.OVH_BUCKET_NAME }}
+            VAL_OVH_ACCESS: ${{ secrets.OVH_ACCESS_KEY }}
+            VAL_OVH_SECRET: ${{ secrets.OVH_SECRET_KEY }}
+            VAL_EMAIL_USER: ${{ secrets.EMAIL_USER }}
+            VAL_EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+            VAL_EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          run: |
+            touch .env.production
+            echo "NODE_ENV=production" >> .env.production
+            echo "PORT=3500" >> .env.production
+            echo "DATABASE_URI=$VAL_DATABASE_URI" >> .env.production
+            echo "ACCESS_TOKEN_SECRET=$VAL_ACCESS_TOKEN" >> .env.production
+            echo "REFRESH_TOKEN_SECRET=$VAL_REFRESH_TOKEN" >> .env.production
+            echo "CLIENT_URL=$VAL_CLIENT_URL" >> .env.production
+            echo "OVH_ENDPOINT=$VAL_OVH_ENDPOINT" >> .env.production
+            echo "OVH_REGION=$VAL_OVH_REGION" >> .env.production
+            echo "OVH_BUCKET_NAME=$VAL_OVH_BUCKET" >> .env.production
+            echo "OVH_ACCESS_KEY=$VAL_OVH_ACCESS" >> .env.production
+            echo "OVH_SECRET_KEY=$VAL_OVH_SECRET" >> .env.production
+            echo "EMAIL_USER=$VAL_EMAIL_USER" >> .env.production
+            echo "EMAIL_PASS=$VAL_EMAIL_PASS" >> .env.production
+            echo "EMAIL_FROM=$VAL_EMAIL_FROM" >> .env.production
+      
       # 3. Build Client Image
       - name: Build Client Docker Image
         run: |
@@ -54,7 +67,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
-          source: "server-image.tar.gz,client-image.tar.gz,docker-compose.prod.yml"
+          source: "server-image.tar.gz,client-image.tar.gz,docker-compose.prod.yml,.env.production"
           target: "/home/hub.linkvids"
 
       # 6. SSH Deploy Command
@@ -79,8 +92,8 @@ jobs:
 
             # C. Restart Containers
             # We explicitly tell compose to use the images we just loaded
-            docker-compose -f docker-compose.prod.yml down
-            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker compose -f docker-compose.prod.yml down
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             # D. Cleanup to save disk space
             rm -f server-image.tar.gz client-image.tar.gz
