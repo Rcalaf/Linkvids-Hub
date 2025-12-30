@@ -16,6 +16,7 @@
     "@aws-sdk/lib-storage": "^3.954.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
     "country-list": "^2.4.1",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",

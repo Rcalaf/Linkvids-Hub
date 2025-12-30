@@ -3,6 +3,12 @@ FROM node:18-alpine as builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
+
+# 1. Accept the argument
+ARG VITE_API_URL
+# 2. Set it as an environment variable for the build command
+ENV VITE_API_URL=$VITE_API_URL
+
 COPY . .
 # This creates the /dist folder
 RUN npm run build

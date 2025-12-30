@@ -1,7 +1,8 @@
 // client/src/api/axiosConfig.js
 import axios from 'axios';
 
-const API_URL = 'https://hub-api.linkvids.io/api';
+const API_URL = import.meta.env.DEV ? '/api' : import.meta.env.VITE_API_URL;
+
 // Create a reusable Axios instance
 const api = axios.create({
     baseURL: API_URL, //'/api', 

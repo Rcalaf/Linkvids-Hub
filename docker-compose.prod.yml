@@ -24,6 +24,10 @@ services:
 
   client:
     image: linkvids-client:latest
+    build:
+      context: ./client
+      args:
+        - VITE_API_URL=https://hub-api.linkvids.io/api
     container_name: linkvids-client
     restart: always
     ports:

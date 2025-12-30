@@ -4,6 +4,8 @@ const path = require('path');
 const express = require('express');
 const mongoose = require('mongoose');
 const dbConnect = require('./config/dbConnect');
+const cors = require('cors');
+const corsOptions = require('./config/corsOptions');
 const app = express();
 const PORT = process.env.PORT || 3500;
 
@@ -11,6 +13,7 @@ const PORT = process.env.PORT || 3500;
 dbConnect();
 
 // Middleware
+app.use(cors(corsOptions));
 app.use(express.json()); // Built-in body parser for JSON
 app.use(express.static(path.join(__dirname, 'public')));
 
