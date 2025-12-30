@@ -1,4 +1,16 @@
 services:
+  mongo:
+    image: mongo:6
+    container_name: linkvids-mongodb
+    restart: always
+    # 1. Define the Root User Credentials
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: 9rQJy59VOuf4
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - ./mongo_data:/data/db
   server:
     image: linkvids-server:latest
     container_name: linkvids-server
@@ -7,6 +19,8 @@ services:
       - "3500:3500"
     env_file:
       - ./server/.env
+    depends_on:
+      - mongo
 
   client:
     image: linkvids-client:latest
