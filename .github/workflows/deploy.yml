@@ -17,6 +17,23 @@ jobs:
       - name: Build Server Docker Image
         run: |
           docker build -t linkvids-server:latest ./server
+      
+      - name: Create Env File
+        run: |
+          echo "NODE_ENV=production" > .env.production
+          echo "PORT=3500" >> .env.production
+          echo "DATABASE_URI=${{ secrets.DATABASE_URI }}" >> .env.production
+          echo "ACCESS_TOKEN_SECRET=${{ secrets.ACCESS_TOKEN_SECRET }}" >> .env.production
+          echo "REFRESH_TOKEN_SECRET=${{ secrets.REFRESH_TOKEN_SECRET }}" >> .env.production
+          echo "CLIENT_URL=${{ secrets.CLIENT_URL }}" >> .env.production
+          echo "OVH_ENDPOINT=${{ secrets.OVH_ENDPOINT }}" >> .env.production
+          echo "OVH_REGION=${{ secrets.OVH_REGION }}" >> .env.production
+          echo "OVH_BUCKET_NAME=${{ secrets.OVH_BUCKET_NAME }}" >> .env.production
+          echo "OVH_ACCESS_KEY=${{ secrets.OVH_ACCESS_KEY }}" >> .env.production
+          echo "OVH_SECRET_KEY=${{ secrets.OVH_SECRET_KEY }}" >> .env.production
+          echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> .env.production
+          echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> .env.production
+          echo "EMAIL_FROM=${{ secrets.EMAIL_FROM }}" >> .env.production
 
       # 3. Build Client Image
       - name: Build Client Docker Image
