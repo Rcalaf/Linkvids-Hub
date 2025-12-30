@@ -20,6 +20,7 @@ jobs:
       
       - name: Create Env File
         run: |
+          touch .env.production
           echo "NODE_ENV=production" > .env.production
           echo "PORT=3500" >> .env.production
           echo "DATABASE_URI=\"${{ secrets.DATABASE_URI }}\"" >> .env.production
