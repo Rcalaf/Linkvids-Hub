@@ -33,7 +33,7 @@ jobs:
           echo "OVH_SECRET_KEY=${{ secrets.OVH_SECRET_KEY }}" >> .env.production
           echo "EMAIL_USER=${{ secrets.EMAIL_USER }}" >> .env.production
           echo "EMAIL_PASS=${{ secrets.EMAIL_PASS }}" >> .env.production
-          echo "EMAIL_FROM=${{ secrets.EMAIL_FROM }}" >> .env.production
+          echo "EMAIL_FROM='${{ secrets.EMAIL_FROM }}'" >> .env.production
 
       # 3. Build Client Image
       - name: Build Client Docker Image
