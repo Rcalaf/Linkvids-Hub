@@ -4,6 +4,9 @@ const nodemailer = require('nodemailer');
 // This works for both @gmail.com and Google Workspace (@yourcompany.com)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    scure: true,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS, 

@@ -1,0 +1,39 @@
+# --- Dependencies ---
+node_modules
+*/node_modules
+
+# --- Environment Variables (CRITICAL) ---
+.env
+.env.production
+.env.development
+*.local
+
+# --- Logs (From your list) ---
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Build Outputs ---
+dist
+dist-ssr
+build
+/client/dist
+/server/dist
+
+# --- Editor directories and files (From your list) ---
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Testing & Coverage ---
+coverage
