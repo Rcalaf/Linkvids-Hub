@@ -12,8 +12,8 @@ const PORT = process.env.PORT || 3500;
 // Connect to MongoDB (and run seeding)
 dbConnect();
 
-// Middleware
 app.use(cors(corsOptions));
+
 app.use(express.json()); // Built-in body parser for JSON
 app.use(express.static(path.join(__dirname, 'public')));
 
