@@ -10,10 +10,10 @@ const corsOptions = {
             callback(new Error('Not allowed by CORS'));
         }
     },
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
-    preflightContinue: false,
+    // allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+    // preflightContinue: false,
     credentials: true,
-    maxAge:600,
+    // maxAge:600,
     optionsSuccessStatus: 200
 }
 
