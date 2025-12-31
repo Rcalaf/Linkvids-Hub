@@ -1,6 +1,8 @@
 // server/controllers/fileController.js
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
+const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
+const https = require("https");
 const Collaborator = require('../models/Collaborator'); 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -12,7 +14,14 @@ const s3Client = new S3Client({
     credentials: {
         accessKeyId: process.env.OVH_ACCESS_KEY,
         secretAccessKey: process.env.OVH_SECRET_KEY
-    }
+    },
+    forcePathStyle: true,
+    requestHandler: new NodeHttpHandler({
+        httpsAgent: new https.Agent({
+            keepAlive: false, 
+            timeout: 60000
+        })
+    })
 });
 
 const BUCKET_NAME = process.env.OVH_BUCKET_NAME;
