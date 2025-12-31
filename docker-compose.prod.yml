@@ -11,6 +11,8 @@ services:
       - "3505:27017"
     volumes:
       - ./mongo_data:/data/db
+    networks:         
+      - default
   server:
     image: linkvids-server:latest
     container_name: linkvids-server
@@ -21,6 +23,8 @@ services:
       - ./server/.env
     depends_on:
       - mongo
+    networks:         
+      - default
 
   client:
     image: linkvids-client:latest
@@ -34,3 +38,10 @@ services:
       - "8080:80"
     depends_on:
       - server
+    networks:        
+      - default
+  networks:
+    default:
+      driver: bridge
+      driver_opts:
+        com.docker.network.driver.mtu: "1400"
