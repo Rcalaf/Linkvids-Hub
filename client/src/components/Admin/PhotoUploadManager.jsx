@@ -10,8 +10,11 @@ import {
     FaTrashAlt, FaUpload, FaFilePdf, FaFileWord, FaFileAlt, FaExternalLinkAlt, FaImage 
 } from 'react-icons/fa';
 
-const API_URL = '/api/files/upload'; 
-const DELETE_API_URL = '/api/files/delete';
+
+const API_URL = import.meta.env.DEV ? '/api/files/upload' : import.meta.env.VITE_API_URL+'/files/upload';
+// const API_URL = '/api/files/upload'; 
+const DELETE_API_URL = import.meta.env.DEV ? '/api/files/delete' : import.meta.env.VITE_API_URL+'/files/delete';
+// const DELETE_API_URL = '/api/files/delete';
 
 // --- CONFIGURATION FOR MODES ---
 const UPLOAD_CONFIG = {
