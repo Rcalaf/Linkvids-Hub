@@ -41,6 +41,8 @@ services:
       - server
     networks:        
       - default
+    extra_hosts:
+      - "server:host-gateway"
 networks:
   default:
     driver: bridge
