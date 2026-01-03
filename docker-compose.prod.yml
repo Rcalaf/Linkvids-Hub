@@ -17,14 +17,15 @@ services:
     image: linkvids-server:latest
     container_name: linkvids-server
     restart: always
-    ports:
-      - "3500:3500"
+    network_mode: "host"
+   # ports:
+   #   - "3500:3500"
     env_file:
       - ./server/.env
     depends_on:
       - mongo
-    networks:         
-      - default
+    #networks:         
+    #  - default
 
   client:
     image: linkvids-client:latest
@@ -40,8 +41,8 @@ services:
       - server
     networks:        
       - default
-  networks:
-    default:
-      driver: bridge
-      driver_opts:
-        com.docker.network.driver.mtu: "1400"
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
