@@ -506,3 +506,61 @@ Commit the workflow file to GitHub.
 git add .github/workflows/deploy.yml
 git commit -m "Add automated deployment pipeline"
 git push origin main
+```
+
+## Configure OVH Cloud Storage (S3)
+
+To enable file uploads (e.g., videos/images) using OVH Object Storage, you need to generate S3-compatible credentials in your OVH Control Panel and add them to your `.env` file.
+
+### 1. Create an Object Storage Container
+1.  Log in to the [OVH Control Panel](https://www.ovh.com/manager/).
+2.  Go to **Public Cloud** > Select your Project.
+3.  Click on **Object Storage** in the left sidebar.
+4.  Click **Create an Object Container**.
+5.  Select a **Region** (e.g., `GRA`, `SBG`, `BHS`)—*Note this down.*
+6.  Select **Standard (S3 API)** as the type.
+7.  Name your container (e.g., `linkvids-storage`)—*Note this down as your Bucket Name.*
+
+### 2. Create an S3 User
+1.  In the **Public Cloud** sidebar, go to **Project Management** > **Users & Roles**.
+2.  Click **Create User**.
+3.  Description: `linkvids-s3-user`.
+4.  Roles: Select **ObjectStore Operator** (or Administrator).
+
+### 3. Generate S3 Credentials
+1.  Once the user is created, find them in the list.
+2.  Click the **... (three dots)** on the right side of the user row.
+3.  Select **Generate S3 credentials**.
+4.  Copy the **Access Key** and **Secret Key** immediately (you cannot see the Secret Key again).
+
+### 4. Update Environment Variables
+Open your `.env` file on the server:
+
+```bash
+nano .env
+```
+
+## Configure Google Email (SMTP)
+
+To enable the platform to send emails (welcome emails, password resets, notifications), we use Google's SMTP server.
+
+**Important:** You cannot use your standard Gmail password. You must generate a specific "App Password."
+
+### 1. Enable 2-Step Verification
+1.  Go to your [Google Account Security Page](https://myaccount.google.com/security).
+2.  Under "How you sign in to Google," select **2-Step Verification**.
+3.  Follow the steps to turn it on (if not already enabled).
+
+### 2. Generate an App Password
+1.  Go back to the [Security Page](https://myaccount.google.com/security).
+2.  Search for **App passwords** in the top search bar (or look under "2-Step Verification" > Scroll to bottom).
+3.  **App name:** Type `Linkvids Platform`.
+4.  Click **Create**.
+5.  Google will generate a 16-character code (e.g., `abcd efgh ijkl mnop`). **Copy this code.**
+    * *Note: You will not see this code again.*
+
+### 3. Update Environment Variables
+Open your `.env` file on the server:
+
+```bash
+nano .env
