@@ -15,8 +15,6 @@ const transporter = nodemailer.createTransport({
 
 // Verify connection on server startup
 transporter.verify((error, success) => {
-    console.log(process.env.EMAIL_USER)
-    console.log(process.env.EMAIL_PASS)
     if (error) {
         console.error("❌ Email Service Error:", error.message);
     } else {
