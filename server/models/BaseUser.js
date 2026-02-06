@@ -35,8 +35,9 @@ const baseUserSchema = new Schema({
     permissions: {
         jobs: { type: String, enum: ['none', 'view', 'edit'], default: 'none' },
         collaborators: { type: String, enum: ['none', 'view', 'edit'], default: 'none' },
-        admins: { type: String, enum: ['none', 'view', 'edit'], default: 'none' },
-        news: { type: String, enum: ['none', 'view', 'edit'], default: 'edit' }
+        config: { type: String, enum: ['none', 'view', 'edit'], default: 'none' },
+        users: { type: String, enum: ['none', 'view', 'edit'], default: 'edit' },
+        news: { type: String, enum: ['none', 'view', 'edit'], default: 'edit' },
     },
 
     profile_picture: { 
@@ -79,6 +80,10 @@ const baseUserSchema = new Schema({
         type: financialProfileSchema,
         default: null
     },
+    lastLogin: {
+        type: Date,
+        default: null 
+    }
     
 },
 {

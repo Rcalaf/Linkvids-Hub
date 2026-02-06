@@ -4,7 +4,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs'); 
-require('dotenv').config({ path: './.env' }); 
+require('dotenv').config({ path: '../.env' }); 
 
 // --- CONFIGURATION ---
 const CSV_FILE_PATH = 'scripts/actors.csv'; 

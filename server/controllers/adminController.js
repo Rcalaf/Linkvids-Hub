@@ -142,28 +142,62 @@ const toggleAdminStatus = async (req, res) => {
 
 const getDashboardStats = async (req, res) => {
     try {
-        // 1. JOB STATISTICS
+        // 1. JOB & APPLICATION STATISTICS
         const jobStats = await Job.aggregate([
             {
-                $group: {
-                    _id: "$status",
-                    count: { $sum: 1 },
-                    totalApplicants: { 
-                        $sum: { 
-                            $size: { $ifNull: ["$applicants", []] } 
+                $project: {
+                    status: 1, // Keep Job Status for grouping
+                    
+                    // A. Calculate Total Valid Applications
+                    // We filter out any entry where 'user' is null to avoid counting deleted users
+                    totalApps: { 
+                        $size: { 
+                            $filter: {
+                                input: { $ifNull: ["$applicants", []] },
+                                as: "app",
+                                cond: { $ne: ["$$app.user", null] } 
+                            }
                         } 
-                    } 
+                    },
+                    
+                    // B. Calculate Pending Applications
+                    // (Status must be 'pending' AND user must not be null)
+                    pendingApps: {
+                        $size: {
+                            $filter: {
+                                input: { $ifNull: ["$applicants", []] },
+                                as: "app",
+                                cond: { 
+                                    $and: [
+                                        { $eq: ["$$app.status", "pending"] },
+                                        { $ne: ["$$app.user", null] }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: "$status", // Group by Job Status (Open, Assigned, etc.)
+                    count: { $sum: 1 }, // Count number of jobs in this status
+                    totalApplicants: { $sum: "$totalApps" }, // Sum valid applications
+                    pendingApplicants: { $sum: "$pendingApps" } // Sum pending applications
                 }
             }
         ]);
 
+        // Format the Aggregation Result into a readable object
         const jobsByStatus = jobStats.reduce((acc, curr) => {
             acc[curr._id] = curr.count;
             return acc;
         }, { Open: 0, Assigned: 0, Completed: 0, Draft: 0 });
 
+        // Calculate Totals
         const totalJobs = Object.values(jobsByStatus).reduce((a, b) => a + b, 0);
         const totalApplications = jobStats.reduce((acc, curr) => acc + (curr.totalApplicants || 0), 0);
+        const totalPendingApplications = jobStats.reduce((acc, curr) => acc + (curr.pendingApplicants || 0), 0);
 
         // 2. USER STATISTICS
         const userStats = await BaseUser.aggregate([
@@ -183,17 +217,19 @@ const getDashboardStats = async (req, res) => {
 
         const totalUsers = (usersByType.Collaborator || 0) + (usersByType.Agency || 0);
 
-        // 3. RECENT ACTIVITY
+        // 3. RECENT ACTIVITY (Notifications)
         const recentActivity = await Notification.find({ recipient: req.user })
             .sort({ createdAt: -1 })
             .limit(5)
             .populate('relatedJob', 'projectName');
 
+        // 4. SEND RESPONSE
         res.json({
             jobs: {
                 total: totalJobs,
                 byStatus: jobsByStatus,
-                totalApplications
+                totalApplications,
+                totalPendingApplications // Now accurate and excludes ghost users
             },
             users: {
                 total: totalUsers,

@@ -1,6 +1,8 @@
 
 const verifyRoles = (...allowedRoles) => {
+    
     return (req, res, next) => {
+      
         if (!req.userType) {
             return res.sendStatus(401); // Unauthorized if no role found
         }

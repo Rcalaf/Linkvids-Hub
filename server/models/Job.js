@@ -57,13 +57,33 @@ const jobSchema = new Schema({
         ref: 'User',
         default: null
     },
-    applicants: [{
-        type: Schema.Types.ObjectId,
-        ref: 'User'
-    }],
+    // applicants: [{
+    //     type: Schema.Types.ObjectId,
+    //     ref: 'User'
+    // }],
     rejectedApplicants: [{
         type: Schema.Types.ObjectId,
         ref: 'User'
+    }],
+    applicants: [{
+        user: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+        appliedAt: {
+            type: Date,
+            default: Date.now
+        },
+        status: {
+            type: String,
+            enum: ['pending', 'viewed', 'shortlisted', 'rejected'],
+            default: 'pending'
+        },
+        coverNote: { 
+            type: String,
+            default: '' 
+        }
     }],
 }, {
     timestamps: true

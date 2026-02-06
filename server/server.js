@@ -29,6 +29,7 @@ app.use('/api/collaborators', require('./routes/userRoutes'));
 app.use('/api/files', require('./routes/fileRoutes'));
 app.use('/api/financial', require('./routes/financialRoutes'));
 app.use('/api/jobs', require('./routes/jobRoutes'));
+app.use('/api/applications', require('./routes/applicationRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/news', require('./routes/newsRoutes'));
 
