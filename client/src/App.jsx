@@ -20,6 +20,8 @@ import RegisterAgency from './pages/Auth/RegisterAgency';
 import Unauthorized from './pages/Auth/Unauthorized'; 
 import RequireAuth from './components/Auth/RequireAuth';
 import Login from './pages/Auth/Login';
+import ResetPassword from './pages/Auth/ResetPassword';
+import ForgotPassword from './pages/Auth/ForgotPassword';
 
 import CollaboratorLayout from './components/Layout/CollaboratorLayout'; 
 import CreatorDashboard from './pages/Creator/CreatorDashboard'; 
@@ -30,6 +32,7 @@ import CreatorJobDetail from './pages/Creator/Jobs/CreatorJobDetail';
 import JobList from './pages/Admin/Jobs/JobList';
 import JobForm from './pages/Admin/Jobs/JobForm'; 
 import JobDetail from './pages/Admin/Jobs/JobDetail';
+import AllApplications from './pages/Admin/Applications/AllApplications';
 
 import Notifications from './pages/Creator/Notifications';
 import AdminNotifications from './pages/Admin/Notifications/AdminNotifications';
@@ -40,6 +43,8 @@ import AdminForm from './pages/Admin/AdminUsers/AdminForm';
 import NewsList from './pages/Admin/News/NewsList';
 import NewsForm from './pages/Admin/News/NewsForm';
 import NewsDetail from './pages/Admin/News/NewsDetail';
+
+
 
 function App() {
   return (
@@ -53,13 +58,15 @@ function App() {
         <Route path="/register" element={<RegisterChoice />} />
         <Route path="/register/collaborator" element={<RegisterCollaborator />} />
         <Route path="/register/agency" element={<RegisterAgency />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="unauthorized" element={<Unauthorized />} />
         
         <Route element={<RequireAuth allowedRoles={['LinkVidsAdmin']} />}>
           {/* Admin Protected Routes */}
           <Route path="admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} /> {/* /admin */}
-            <Route path="config" element={<RequirePermission module="config" level="view" layout={<ConfigManager />}/>}>
+            <Route path="config" element={<RequirePermission module="config" level="edit" layout={<ConfigManager />}/>}>
                 <Route index element={<ConfigHubCards />} /> 
                 <Route path="attributes" element={<ManageAttributes />} /> 
                 <Route path="user-types" element={<ManageUserTypes />} />
@@ -83,7 +90,10 @@ function App() {
                 <Route path=":jobId" element={<JobDetail />} />
                 <Route path=":jobId/edit" element={<JobForm />} /> {/* /admin/jobs/:id/edit */}
             </Route>
-             <Route path="news" element={<RequirePermission module="news" level="view" />}>
+            <Route path="applications" element={<RequirePermission module="jobs" level="view" />}>
+                <Route index element={<AllApplications />} />
+            </Route>
+            <Route path="news" element={<RequirePermission module="news" level="view" />}>
                 <Route index element={<NewsList />} />           
                 <Route path="create" element={<NewsForm />} />    
                 <Route path=":id" element={<NewsDetail />} /> 

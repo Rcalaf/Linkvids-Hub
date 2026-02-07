@@ -1,5 +1,3 @@
-// client/src/pages/Creator/CreatorDashboard.jsx
-
 import React, { useState, useEffect } from 'react';
 import { 
     Container, Row, Col, Card, CardBody, Button, Badge, 
@@ -10,6 +8,8 @@ import {
     FaBriefcase, FaUserCircle, FaArrowRight, FaCalendarAlt, 
     FaCheckCircle, FaExclamationCircle, FaNewspaper, FaExternalLinkAlt 
 } from 'react-icons/fa';
+// 🚨 Import Markdown Renderer
+import ReactMarkdown from 'react-markdown'; 
 
 // Components
 import JobStatusBadge from '../../components/Job/JobStatusBadge';
@@ -18,7 +18,7 @@ import Widget from '../../components/Widget/Widget';
 // Services
 import { getAllJobs } from '../../services/jobService';
 import { getDashboardStats } from '../../services/userService'; 
-import { getNewsFeed } from '../../services/newsService'; // 🚨 Updated Service
+import { getNewsFeed } from '../../services/newsService';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function CreatorDashboard() {
@@ -37,7 +37,7 @@ export default function CreatorDashboard() {
     });
     const [loading, setLoading] = useState(true);
 
-    // Modal State (For reading internal news)
+    // Modal State
     const [modalOpen, setModalOpen] = useState(false);
     const [selectedNews, setSelectedNews] = useState(null);
 
@@ -49,7 +49,6 @@ export default function CreatorDashboard() {
         try {
             const myRole = user?.collaboratorType || user?.agencyType;
             
-            // 🚨 Optimized Fetching: Requesting only 5 news items via API
             const [jobsResult, statsResult, newsResult] = await Promise.all([
                 getAllJobs({ limit: 5, status: 'Open', targetRole: myRole }),
                 getDashboardStats(),
@@ -108,17 +107,9 @@ export default function CreatorDashboard() {
                                 {news.map(item => (
                                     <ListGroupItem key={item._id} className="p-3 border-bottom action-hover">
                                         <Row className="align-items-start">
-                                            {/* Icon Column */}
-                                            {/* <Col xs={1} className="text-center pt-1 d-none d-sm-block">
-                                                <div className="rounded-circle bg-light text-primary p-2 d-inline-block">
-                                                    <FaNewspaper size={18} />
-                                                </div>
-                                            </Col> */}
-                                            
                                             {/* Content Column */}
                                             <Col sm={8} xs={12}>
                                                 <div className="d-flex align-items-center mb-1">
-                                                    {/* <h6 className="mb-0 fw-bold text-dark">{item.title}</h6> */}
                                                     <h6 
                                                         className="mb-0 fw-bold text-dark" 
                                                         style={{ cursor: 'pointer' }}
@@ -130,9 +121,15 @@ export default function CreatorDashboard() {
                                                         {new Date(item.createdAt).toLocaleDateString()}
                                                     </Badge>
                                                 </div>
-                                                <p className="text-muted mb-2 small">
-                                                    {item.excerpt}
-                                                </p>
+                                                
+                                                {/* 🚨 Use ReactMarkdown for Excerpt (Optional but cleaner) */}
+                                                <div className="text-muted mb-2 small" style={{ fontSize: '0.9rem' }}>
+                                                    <ReactMarkdown 
+                                                        components={{ p: ({node, ...props}) => <p style={{margin:0}} {...props}/> }}
+                                                    >
+                                                        {item.excerpt}
+                                                    </ReactMarkdown>
+                                                </div>
                                             </Col>
                                             
                                             {/* Action Column */}
@@ -282,20 +279,71 @@ export default function CreatorDashboard() {
 
                     {/* 5. Stats Widget */}
                     <Widget title="My Activity">
-                       {loading ? <p className="text-muted">Loading stats...</p> : (
+                        {loading ? <p className="text-muted">Loading stats...</p> : (
                             <ListGroup flush>
+                                
+                                {/* 1. Active Applications */}
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
-                                    Active Applications
-                                    <Badge color="primary" pill >
+                                    <div>
+                                        Active Applications
+                                        <Link 
+                                            to="/creator/jobs" 
+                                            state={{ initialStatus: 'Applied' }}
+                                            className="ms-2 text-decoration-none small text-primary"
+                                        >
+                                            <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
+                                        </Link>
+                                    </div>
+                                    <Badge color="primary" pill>
                                         {stats.activeApplications}
                                     </Badge>
                                 </ListGroupItem>
+
+                                {/* 2. 🚨 NEW: Jobs Assigned (Your Current Projects) */}
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
-                                    Jobs Completed
+                                    <div>
+                                        Jobs Assigned
+                                        <Link 
+                                            to="/creator/jobs" 
+                                            state={{ initialStatus: 'Assigned' }} // Filters list to assigned jobs
+                                            className="ms-2 text-decoration-none small text-primary"
+                                        >
+                                            <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
+                                        </Link>
+                                    </div>
+                                    <Badge color="primary" pill>
+                                        {stats.assignedJobs || 0}
+                                    </Badge>
+                                </ListGroupItem>
+
+                                <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
+                                    <div>
+                                        Jobs Completed
+                                        <Link 
+                                            to="/creator/jobs" 
+                                            state={{ initialStatus: 'Completed' }}
+                                            className="ms-2 text-decoration-none small text-success"
+                                        >
+                                            <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
+                                        </Link>
+                                    </div>
                                     <Badge color="success" pill>
                                         {stats.jobsCompleted}
                                     </Badge>
                                 </ListGroupItem>
+
+                                {/* 3. Rejected Applications */}
+                                <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
+                                    Rejected Applications
+                                    <Badge color="danger" pill>
+                                        {stats.rejectedApplications || 0}
+                                    </Badge>
+                                </ListGroupItem>
+
+                                {/* 4. Jobs Completed */}
+                                
+
+                                {/* 5. Earnings */}
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
                                     Total Earnings
                                     <span className="fw-bold text-success">
@@ -308,16 +356,34 @@ export default function CreatorDashboard() {
                 </Col>
             </Row>
 
-            {/* 6. NEWS READER MODAL */}
+            {/* 6. NEWS READER MODAL (UPDATED WITH MARKDOWN) */}
             <Modal isOpen={modalOpen} toggle={toggleModal} size="lg">
                 <ModalHeader toggle={toggleModal}>
                     <FaNewspaper className="me-2 text-primary" />
                     {selectedNews?.title}
                 </ModalHeader>
-                <ModalBody style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-                    {selectedNews?.content}
+                <ModalBody className="p-4" style={{ lineHeight: '1.7', fontSize: '1rem' }}>
+                    {/* 🚨 Render Markdown Content */}
+                    <ReactMarkdown 
+                        components={{
+                            a: ({node, ...props}) => <a style={{color: '#0d6efd', fontWeight: 'bold'}} target="_blank" rel="noopener noreferrer" {...props} />,
+                            img: ({node, ...props}) => <img style={{maxWidth: '100%', height: 'auto', borderRadius: '8px', margin: '15px 0'}} {...props} />,
+                            h1: ({node, ...props}) => <h2 className="mt-4 mb-3 border-bottom pb-2" {...props} />,
+                            h2: ({node, ...props}) => <h3 className="mt-4 mb-3" {...props} />,
+                            blockquote: ({node, ...props}) => <blockquote className="border-start border-4 border-primary ps-3 fst-italic text-muted my-3" {...props} />
+                        }}
+                    >
+                        {selectedNews?.content}
+                    </ReactMarkdown>
                 </ModalBody>
                 <ModalFooter>
+                    {selectedNews?.linkUrl && (
+                         <a href={selectedNews.linkUrl} target="_blank" rel="noopener noreferrer" className="me-auto">
+                            <Button color="primary" outline>
+                                <FaExternalLinkAlt className="me-2" /> Visit External Link
+                            </Button>
+                        </a>
+                    )}
                     <Button color="secondary" onClick={toggleModal}>Close</Button>
                 </ModalFooter>
             </Modal>

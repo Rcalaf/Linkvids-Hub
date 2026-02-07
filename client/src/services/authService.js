@@ -22,6 +22,19 @@ export const clearStoredAuth = () => {
     //localStorage.clear(); // Optional: Nuclear option
 };
 
+export const forgotPasswordAPI = async (email) => {
+    // This sends { email: "..." } to /api/auth/forgot-password
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+};
+
+// NEW: Reset Password Call
+export const resetPasswordAPI = async (userId, token, password) => {
+    // This sends the payload to /api/auth/reset-password
+    const response = await api.post('/auth/reset-password', { userId, token, password });
+    return response.data;
+};
+
 // --- API Calls ---
 export const loginAPI = async (credentials) => {
     const response = await api.post('/auth/login', credentials);

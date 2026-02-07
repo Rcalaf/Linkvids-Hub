@@ -1,6 +1,6 @@
 // client/src/pages/Admin/News/NewsForm.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
     Container, Row, Col, Card, CardBody, 
@@ -8,12 +8,14 @@ import {
 } from 'reactstrap';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
-// 🚨 Added new icons for the metadata card
 import { 
     FaSave, FaArrowLeft, FaNewspaper, FaLink, FaInfoCircle, 
     FaCalendarAlt, FaClock, FaUser, FaCheckCircle 
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+
+import SimpleMDE from "react-simplemde-editor";
+import "easymde/dist/easymde.min.css";
 
 import Title from '../../../components/Title';
 import { createNews, updateNews, getNewsById } from '../../../services/newsService';
@@ -24,8 +26,6 @@ export default function NewsForm() {
     const isEditMode = !!id;
     
     const [loadingData, setLoadingData] = useState(isEditMode);
-    
-    // 1. New State to hold read-only metadata (dates, author)
     const [metaData, setMetaData] = useState(null); 
 
     const [initialValues, setInitialValues] = useState({
@@ -36,7 +36,35 @@ export default function NewsForm() {
         status: 'Draft'
     });
 
-    // Validation Schema
+    // 1. MAIN CONTENT OPTIONS (Full Featured)
+    const contentOptions = useMemo(() => {
+        return {
+            spellChecker: false,
+            maxHeight: "400px",
+            placeholder: "Write the full article...",
+            status: false,
+            toolbar: [
+                "bold", "italic", "heading", "|", 
+                "quote", "unordered-list", "ordered-list", "|",
+                "link", "image", "|", 
+                "preview", "side-by-side", "fullscreen"
+            ],
+        };
+    }, []);
+
+    // 🚨 2. EXCERPT OPTIONS (Simplified & Smaller)
+    const excerptOptions = useMemo(() => {
+        return {
+            spellChecker: false,
+            minHeight: "100px", // Smaller height
+            maxHeight: "150px", // Limit expansion
+            placeholder: "Short summary...",
+            status: false,
+            // Removed images/headings/fullscreen to keep it simple for a summary
+            toolbar: ["bold", "italic", "|", "link", "|", "preview"], 
+        };
+    }, []);
+
     const validationSchema = Yup.object().shape({
         title: Yup.string()
             .required('Title is required')
@@ -55,16 +83,12 @@ export default function NewsForm() {
             .required('Status is required')
     });
 
-    // Load Data
     useEffect(() => {
         if (isEditMode) {
             const loadData = async () => {
                 try {
                     const data = await getNewsById(id);
-                    
-                    // 2. Save full object to metaData state for the sidebar
                     setMetaData(data);
-
                     setInitialValues({
                         title: data.title || '',
                         excerpt: data.excerpt || '',
@@ -88,15 +112,15 @@ export default function NewsForm() {
         try {
             if (isEditMode) {
                 await updateNews(id, values);
-                toast.success("News item updated successfully");
+                toast.success("News updated");
             } else {
                 await createNews(values);
-                toast.success("News item created successfully");
+                toast.success("News created");
             }
             navigate('/admin/news');
         } catch (error) {
             console.error(error);
-            toast.error(error.response?.data?.message || "Failed to save news item");
+            toast.error(error.response?.data?.message || "Failed to save");
         } finally {
             setSubmitting(false);
         }
@@ -104,7 +128,6 @@ export default function NewsForm() {
 
     if (loadingData) return <div className="p-5 text-center">Loading form...</div>;
 
-    // Helper variable for the new card
     const news = metaData; 
 
     return (
@@ -124,10 +147,9 @@ export default function NewsForm() {
                 onSubmit={handleSubmit}
                 enableReinitialize
             >
-                {({ values, errors, touched, handleChange, handleBlur, handleSubmit, isSubmitting }) => (
+                {({ values, errors, touched, handleChange, handleBlur, handleSubmit, isSubmitting, setFieldValue }) => (
                     <Form onSubmit={handleSubmit}>
                         <Row>
-                            {/* LEFT COLUMN: Content */}
                             <Col lg={8}>
                                 <Card className="shadow-sm border-0 mb-4">
                                     <CardBody className="p-4">
@@ -146,46 +168,47 @@ export default function NewsForm() {
                                             <FormFeedback>{errors.title}</FormFeedback>
                                         </FormGroup>
 
+                                        {/* 🚨 3. REPLACED EXCERPT INPUT WITH SIMPLEMDE */}
                                         <FormGroup className="mb-3">
                                             <Label htmlFor="excerpt" className="fw-bold">Short Summary <span className="text-danger">*</span></Label>
-                                            <Input
-                                                type="textarea"
+                                            
+                                            <SimpleMDE
                                                 id="excerpt"
-                                                name="excerpt"
-                                                rows="3"
-                                                maxLength="200"
                                                 value={values.excerpt}
-                                                onChange={handleChange}
-                                                onBlur={handleBlur}
-                                                invalid={touched.excerpt && !!errors.excerpt}
+                                                onChange={(value) => setFieldValue("excerpt", value)}
+                                                options={excerptOptions}
+                                                className={touched.excerpt && errors.excerpt ? "border border-danger rounded" : ""}
                                             />
+                                            
+                                            {/* Character Count & Error Message */}
                                             <div className="d-flex justify-content-between mt-1">
-                                                <FormFeedback className="d-block">{errors.excerpt}</FormFeedback>
-                                                <small className={`text-end ${values.excerpt.length > 180 ? 'text-danger' : 'text-muted'}`}>
-                                                    {values.excerpt.length}/200
+                                                <div className="text-danger small">{touched.excerpt && errors.excerpt}</div>
+                                                <small className={`text-end ${values.excerpt.length > 200 ? 'text-danger fw-bold' : 'text-muted'}`}>
+                                                    {values.excerpt.length}/200 characters
                                                 </small>
                                             </div>
                                         </FormGroup>
 
+                                        {/* 4. MAIN CONTENT EDITOR */}
                                         <FormGroup className="mb-3">
                                             <Label htmlFor="content" className="fw-bold">Full Content <span className="text-danger">*</span></Label>
-                                            <Input
-                                                type="textarea"
+                                            
+                                            <SimpleMDE
                                                 id="content"
-                                                name="content"
-                                                rows="12"
                                                 value={values.content}
-                                                onChange={handleChange}
-                                                onBlur={handleBlur}
-                                                invalid={touched.content && !!errors.content}
+                                                onChange={(value) => setFieldValue("content", value)}
+                                                options={contentOptions}
+                                                className={touched.content && errors.content ? "border border-danger rounded" : ""}
                                             />
-                                            <FormFeedback>{errors.content}</FormFeedback>
+                                            
+                                            {touched.content && errors.content && (
+                                                <div className="text-danger small mt-1">{errors.content}</div>
+                                            )}
                                         </FormGroup>
                                     </CardBody>
                                 </Card>
                             </Col>
 
-                            {/* RIGHT COLUMN: Settings & Metadata */}
                             <Col lg={4}>
                                 <Card className="shadow-sm border-0 mb-4">
                                     <CardBody className="p-4 bg-light">
@@ -231,7 +254,7 @@ export default function NewsForm() {
                                         </FormGroup>
                                         
                                         <div className="d-grid gap-2 mt-5">
-                                            <Button type="submit" color="primary" size="lg" disabled={isSubmitting}>
+                                            <Button type="submit" color="primary" size="sm" disabled={isSubmitting}>
                                                 {isSubmitting ? 'Saving...' : (
                                                     <><FaSave className="me-2" /> {isEditMode ? "Save Changes" : "Publish News"}</>
                                                 )}
@@ -241,7 +264,6 @@ export default function NewsForm() {
                                     </CardBody>
                                 </Card>
 
-                                {/* 🚨 NEW METADATA CARD (ONLY IN EDIT MODE) 🚨 */}
                                 {isEditMode && news && (
                                     <Card className="shadow-sm border-0">
                                         <CardBody>
@@ -286,7 +308,6 @@ export default function NewsForm() {
                                         </CardBody>
                                     </Card>
                                 )}
-                                {/* 🚨 END NEW CARD 🚨 */}
                             </Col>
                         </Row>
                     </Form>

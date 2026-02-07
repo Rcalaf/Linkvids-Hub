@@ -8,6 +8,7 @@ import {
     FaCalendarAlt, FaUser, FaCheckCircle, FaCircle, FaClock 
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import ReactMarkdown from 'react-markdown';
 
 import Title from '../../../components/Title';
 import { getNewsById, deleteNews } from '../../../services/newsService';
@@ -120,7 +121,9 @@ export default function NewsDetail() {
                                     If you implement a Rich Text Editor later, use dangerouslySetInnerHTML here.
                                 */}
                                 <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.8', fontSize: '1.05rem', color: '#444' }}>
-                                    {news.content}
+                                    <div className="news-content">
+                                        <ReactMarkdown>{news.content}</ReactMarkdown>
+                                    </div>
                                 </div>
                             </div>
                         </CardBody>

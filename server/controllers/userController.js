@@ -188,7 +188,15 @@ exports.getUserById = async (req, res) => {
     }
 
     try {
-        const user = await BaseUser.findById(userId).lean();
+        //const user = await BaseUser.findById(userId).lean();
+        let query = BaseUser.findById(userId);
+
+        if (req.user && req.userType === 'LinkVidsAdmin') {
+            query = query.select('+adminRatingNotes');
+        }
+
+        // 3. Execute
+        const user = await query.lean();
 
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
@@ -304,65 +312,54 @@ exports.deleteUser = async (req, res) => {
     }
 };
 
+// server/controllers/userController.js
+
 exports.getDashboardStats = async (req, res) => {
     try {
-        const userId = req.user;
-        console.log('user ID:')
-
+        const userId = req.user._id || req.user;
         const userObjectId = new mongoose.Types.ObjectId(userId);
 
         const user = await BaseUser.findById(userId)
             .select('profile_picture phone city country financial_profile groupSpecificAttributes')
             .lean();
 
-          console.log(userObjectId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // --- CALCULATE SCORE & TRACK MISSING ITEMS ---
+        // --- PROFILE SCORE ---
         let score = 0;
-        const missingRequirements = []; // 🚨 Array to store missing items
+        const missingRequirements = [];
+        if (user.profile_picture) score += 20; else missingRequirements.push("Profile Picture");
+        if (user.phone) score += 10; else missingRequirements.push("Phone Number");
+        if (user.city && user.country) score += 10; else missingRequirements.push("Location (City/Country)");
+        if (user.financial_profile?.iban) score += 30; else missingRequirements.push("Financial Info (IBAN)");
+        if (user.groupSpecificAttributes && Object.keys(user.groupSpecificAttributes).length > 0) score += 30; else missingRequirements.push("Role Details (Profile)");
 
-        // 1. Profile Picture (20%)
-        if (user.profile_picture) {
-            score += 20;
-        } else {
-            missingRequirements.push("Profile Picture");
-        }
-
-        // 2. Contact Info (Phone) (10%)
-        if (user.phone) {
-            score += 10;
-        } else {
-            missingRequirements.push("Phone Number");
-        }
-
-        // 3. Location (10%)
-        if (user.city && user.country) {
-            score += 10;
-        } else {
-            missingRequirements.push("Location (City/Country)");
-        }
-
-        // 4. Financial Info (30%)
-        if (user.financial_profile?.iban) {
-            score += 30;
-        } else {
-            missingRequirements.push("Financial Info (IBAN)");
-        }
-
-        // 5. Professional Details (30%)
-        if (user.groupSpecificAttributes && Object.keys(user.groupSpecificAttributes).length > 0) {
-            score += 30;
-        } else {
-            missingRequirements.push("Role Details (Profile)");
-        }
-
-        // --- FETCH JOB STATS ---
+        // --- JOB STATS ---
+        
+        // 1. Active Applications (Pending/Shortlisted in Open jobs)
         const activeApplications = await Job.countDocuments({
             status: 'Open',
-            applicants: userObjectId
+            applicants: {
+                $elemMatch: {
+                    user: userObjectId,
+                    status: { $in: ['pending', 'shortlisted'] } 
+                }
+            }
         });
 
+        // 2. Rejected Applications
+        const rejectedApplications = await Job.countDocuments({
+            applicants: {
+                $elemMatch: { user: userObjectId, status: 'rejected' }
+            }
+        });
+
+        const assignedJobs = await Job.countDocuments({
+            assignedTo: userObjectId,
+            status: { $in: ['Assigned', 'In Progress'] } 
+        });
+
+        // 4. Completed Jobs
         const completedStats = await Job.aggregate([
             { $match: { status: 'Completed', assignedTo: userObjectId } },
             { $group: { _id: null, count: { $sum: 1 }, totalEarnings: { $sum: "$rate" } } }
@@ -371,7 +368,9 @@ exports.getDashboardStats = async (req, res) => {
         res.json({
             profileCompleteness: score,
             missingRequirements, 
-            activeApplications: activeApplications,
+            activeApplications,
+            rejectedApplications,
+            assignedJobs, 
             jobsCompleted: completedStats[0]?.count || 0,
             totalEarnings: completedStats[0]?.totalEarnings || 0
         });
@@ -379,5 +378,34 @@ exports.getDashboardStats = async (req, res) => {
     } catch (error) {
         console.error("Dashboard Stats Error:", error);
         res.status(500).json({ message: 'Failed to calculate stats' });
+    }
+};
+
+// @desc    Rate a user (Internal Admin Use)
+// @route   PUT /api/users/:id/rate
+exports.rateUser = async (req, res) => {
+    try {
+        const { rating, notes } = req.body;
+
+        console.log(notes)
+        
+        const user = await BaseUser.findById(req.params.userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        // Update fields
+        if (rating !== undefined) user.adminRating = rating;
+        if (notes !== undefined) user.adminRatingNotes = notes;
+
+        await user.save({ validateBeforeSave: false });
+
+        res.json({ 
+            message: 'Rating updated', 
+            adminRating: user.adminRating, 
+            adminRatingNotes: user.adminRatingNotes 
+        });
+
+    } catch (error) {
+        console.error("Rate User Error:", error);
+        res.status(500).json({ message: 'Failed to update rating' });
     }
 };

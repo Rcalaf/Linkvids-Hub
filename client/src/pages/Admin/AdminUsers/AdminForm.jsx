@@ -15,7 +15,7 @@ export default function AdminForm() {
         name: '',
         email: '',
         isActive: true,
-        permissions: { jobs: 'view', collaborators: 'view', admins: 'none', news: 'view',  }
+        permissions: { jobs: 'view', collaborators: 'view', config: 'none', news: 'view', users: 'view' }
     });
     
     const [tempPassword, setTempPassword] = useState(null); // For Success View
@@ -33,7 +33,7 @@ export default function AdminForm() {
                 name: data.name,
                 email: data.email,
                 isActive: data.isActive,
-                permissions: data.permissions || { jobs: 'view', collaborators: 'view', admins: 'none', news: 'view', }
+                permissions: data.permissions || { jobs: 'view', collaborators: 'view', config: 'none', news: 'view', users: 'view' }
             });
         } catch (e) {
             toast.error("Failed to load admin details");
@@ -96,7 +96,6 @@ export default function AdminForm() {
         );
     }
 
-    // 🚨 FORM VIEW 🚨
     return (
         <Container fluid>
             <div className="mb-4">
@@ -153,7 +152,7 @@ export default function AdminForm() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {['jobs', 'collaborators', 'news', 'admins'].map(module => (
+                                        {['jobs', 'collaborators', 'news', 'users',  'config'].map(module => (
                                             <tr key={module}>
                                                 <td className="fw-bold text-capitalize">{module} Management</td>
                                                 {['none', 'view', 'edit'].map(level => (
@@ -184,7 +183,7 @@ export default function AdminForm() {
                                 <div className="d-flex justify-content-end mt-4">
                                     <Link to="/admin/users" className="btn btn-outline-secondary me-2">Cancel</Link>
                                     <Button color="primary" type="submit" disabled={loading}>
-                                        <FaSave className="me-2" /> {isEditMode ? "Save Changes" : "Create Admin"}
+                                        {/* <FaSave className="me-2" />*/} {isEditMode ? "Save Changes" : "Create Admin"} 
                                     </Button>
                                 </div>
                             </Form>

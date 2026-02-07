@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, CardBody, CardTitle, CardSubtitle, Button, Badge, Input, InputGroup, InputGroupText, Form, FormGroup, Label } from 'reactstrap';
+import { useLocation } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { FaSearch, FaCalendarAlt, FaBriefcase, FaFilter, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
@@ -11,18 +12,17 @@ import { useAuth } from '../../../hooks/useAuth';
 
 export default function CreatorJobBoard() {
     const { auth } = useAuth();
-    
+    const location = useLocation(); 
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Filter States
+    // 3. Update state initialization to check location.state first
     const [filters, setFilters] = useState({
         search: '',
-        status: 'Open', // Default to Open
+        status: location.state?.initialStatus || 'Open', 
         startDate: ''
     });
-
-    // 🚨 Trigger fetch whenever filters change 🚨
+   
     useEffect(() => {
         fetchJobs();
     }, [filters]); 
@@ -49,6 +49,7 @@ export default function CreatorJobBoard() {
                 data = data.filter(job => new Date(job.projectStartDate) >= filterDate);
             }
 
+            console.log(data[0])
             setJobs(data);
         } catch (error) {
             console.error(error);
@@ -102,7 +103,7 @@ export default function CreatorJobBoard() {
                                     onChange={handleFilterChange}
                                 >
                                     <option value="Open">Open Opportunities</option>
-                                    <option value="Applied">My Applications</option> {/* 🚨 Handled by backend now */}
+                                    <option value="Applied">My Applications</option> 
                                     <option value="Assigned">History: Assigned</option>
                                     <option value="Completed">History: Completed</option>
                                 </Input>

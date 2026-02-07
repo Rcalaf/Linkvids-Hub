@@ -83,7 +83,23 @@ const baseUserSchema = new Schema({
     lastLogin: {
         type: Date,
         default: null 
-    }
+    },
+    adminRating: {
+        type: Number,
+        min: 0,
+        max: 5,
+        default: 0,
+        index: true // Indexed for fast sorting
+    },
+    adminRatingNotes: {
+        type: String,
+        trim: true,
+        select: false 
+    },
+    jobRatingStats: {
+        average: { type: Number, default: 0 },
+        count: { type: Number, default: 0 }
+    },
     
 },
 {

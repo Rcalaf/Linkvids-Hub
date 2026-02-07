@@ -32,7 +32,7 @@ app.use('/api/jobs', require('./routes/jobRoutes'));
 app.use('/api/applications', require('./routes/applicationRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/news', require('./routes/newsRoutes'));
-
+app.use('/api/filters', require('./routes/savedFilterRoutes'));
 
 // Start listening once DB connection is successful
 mongoose.connection.once('open', () => {

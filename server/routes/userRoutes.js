@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const verifyRoles = require('../middleware/verifyRoles');
 const verifyJWT = require('../middleware/verifyJWT');
 
 // NOTE: Add authentication middleware here (e.g., router.use(verifyAdminJWT))
@@ -20,6 +21,8 @@ router.route('/:userId')
     .get(userController.getUserById)     // SHOW / EDIT FORM LOAD
     .put(userController.updateExistingUser) // UPDATE
     .delete(userController.deleteUser);
+    
+router.put('/:userId/rate', verifyRoles('LinkVidsAdmin'), userController.rateUser);
 
 
 

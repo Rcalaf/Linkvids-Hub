@@ -62,7 +62,7 @@ export default function AdminList() {
         <Container fluid>
             <Title title="Admin Team" />
             <div className="d-flex justify-content-between align-items-center mb-4">
-                {can('admins', 'edit') && (
+                {can('config', 'edit') && (
                 <Link to="/admin/users/create">
                     <Button color="primary"><FaPlus className="me-2" /> New Admin</Button>
                 </Link>
@@ -82,7 +82,7 @@ export default function AdminList() {
                     <tbody>
                         {admins.map(admin => {
                             const isMe = admin._id === currentUserId;
-                          
+                           
                             return (
                             <tr key={admin._id} className={!admin.isActive ? 'opacity-50' : ''}>
                                 <td>
@@ -99,7 +99,7 @@ export default function AdminList() {
                                 <td>{renderPerms(admin.permissions)}</td>
                                 <td className="text-center">
                                     <FormGroup switch className="d-flex justify-content-center">
-                                        {can('admins', 'edit') && (
+                                        {can('config', 'edit') && (
                                         <Input 
                                             type="switch" 
                                             checked={admin.isActive}
@@ -110,12 +110,12 @@ export default function AdminList() {
                                     </FormGroup>
                                 </td>
                                 <td className="text-end">
-                                    {can('admins', 'edit') && (
+                                    {can('config', 'edit') && (
                                         <Link to={`/admin/users/edit/${admin._id}`}>
                                             <Button color="light" size="sm" className="me-2 border"><FaEdit /></Button>
                                         </Link>
                                     )}
-                                    {!isMe && can('admins', 'edit') && (
+                                    {!isMe && can('config', 'edit') && (
                                         <Button color="light" size="sm" className="text-danger border" onClick={() => handleDelete(admin._id)}>
                                             <FaTrash />
                                         </Button>

@@ -23,6 +23,8 @@ export default function Login() {
         setError('');
         setLoading(true);
 
+        console.log('logginging.....')
+
         try {
             const response = await axios.post('/auth/login', formData);
             const { accessToken, redirectPath, user } = response.data;

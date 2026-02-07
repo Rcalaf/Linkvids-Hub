@@ -77,13 +77,23 @@ const jobSchema = new Schema({
         },
         status: {
             type: String,
-            enum: ['pending', 'viewed', 'shortlisted', 'rejected'],
+            enum: ['pending', 'viewed', 'shortlisted', 'rejected', 'assigned'],
             default: 'pending'
         },
         coverNote: { 
             type: String,
             default: '' 
-        }
+        },
+        rating: { 
+            type: Number, 
+            min: 1, 
+            max: 5,
+            default: null 
+        },
+        ratingNote: { 
+            type: String,
+            trim: true
+        },
     }],
 }, {
     timestamps: true

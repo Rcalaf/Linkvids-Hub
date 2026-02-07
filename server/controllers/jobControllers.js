@@ -87,7 +87,7 @@ exports.getAllJobs = async (req, res) => {
         } else {
             // Collaborator Logic: Restricted filtering
             if (status === 'Applied') {
-                query.applicants = currentUserId; 
+                query['applicants.user'] = currentUserId; 
             } else if (status === 'Assigned' || status === 'Completed') {
                 query.status = status;
                 query.assignedTo = currentUserId; 
@@ -124,20 +124,36 @@ exports.getAllJobs = async (req, res) => {
         
         jobs = jobs.map(job => {
             // A. Calculate Context Flags (Useful for everyone)
-            const hasApplied = job.applicants && job.applicants.some(id => id.toString() === currentUserId);
-            const isRejected = job.rejectedApplicants && job.rejectedApplicants.some(id => id.toString() === currentUserId);
-            const isSelected = job.assignedTo && job.assignedTo.toString() === currentUserId;
+            const userIdStr = currentUserId.toString();
+
+            // A. Find the specific application object for this user (if it exists)
+            // We handle both new schema (app.user) and potential old legacy data (app ID string)
+            const myApplication = job.applicants && job.applicants.find(app => {
+                const appId = app.user ? app.user.toString() : app.toString();
+                return appId === userIdStr;
+            });
+
+            // B. Calculate Flags based on that object
+            const hasApplied = !!myApplication; // True if object found
             
-            // Calculate Applicant Count (Useful for Admin List)
+            // Check status property inside the object
+            const isRejected = myApplication ? myApplication.status === 'rejected' : false;
+            
+            // Check assignedTo field on the job
+            const isSelected = job.assignedTo && job.assignedTo.toString() === userIdStr;
+            
+            // Calculate Applicant Count
             const applicantCount = job.applicants ? job.applicants.length : 0;
 
-            // B. Prepare base object
+            // C. Prepare base object
             const jobData = { 
                 ...job, 
                 hasApplied,
                 isRejected,
                 isSelected,
-                applicantCount 
+                applicantCount,
+                // Optional: You can pass the specific status if you need to show "Shortlisted" etc.
+                myApplicationStatus: myApplication ? myApplication.status : null 
             };
 
             if (req.userType !== 'LinkVidsAdmin') {
@@ -302,7 +318,6 @@ exports.deleteJob = async (req, res) => {
 // @desc    Apply or Withdraw Application
 // @route   POST /api/jobs/:jobId/toggle-application
 exports.toggleApplication = async (req, res) => {
-    console.log("calling toggle...")
     try {
         const { jobId } = req.params;
         
@@ -461,6 +476,8 @@ exports.getAllApplications = async (req, res) => {
                         status: app.status, // 'pending', 'shortlisted', 'accepted', 'rejected'
                         appliedAt: app.appliedAt,
                         coverNote: app.coverNote,
+                        rating: app.rating,
+                        ratingNote: app.ratingNote,
 
                         // Candidate Metadata
                         candidateId: app.user._id,
@@ -507,13 +524,15 @@ exports.getJobApplicants = async (req, res) => {
                 status: app.status,     // 'pending', 'rejected', etc.
                 appliedAt: app.appliedAt,
                 coverNote: app.coverNote,
+                rating: app.rating,
+                ratingNote: app.ratingNote,
 
                 // User Data (Flattened for easier access)
                 userId: app.user._id,
                 name: app.user.name,
                 username: app.user.username,
                 email: app.user.email,
-                profile_picture: app.user.profile_picture,
+                profile_picture: app.user.profile_picture,  
                 collaboratorType: app.user.collaboratorType,
                 city: app.user.city,
                 country: app.user.country
@@ -567,15 +586,16 @@ exports.assignJob = async (req, res) => {
         job.applicants.forEach(app => {
             if (app.user.toString() === userId) {
                 // The Winner
-                app.status = 'shortlisted'; // or 'accepted' - marks them as the chosen one
-            } else {
-                // The Losers
-                // Only mark them rejected if they aren't already (prevent double notifications if re-running)
-                if (app.status !== 'rejected') {
-                    app.status = 'rejected';
-                    rejectedIds.push(app.user.toString());
-                }
-            }
+                app.status = 'assigned'; // or 'accepted' - marks them as the chosen one
+            } 
+            // else {
+            //     // The Losers
+            //     // Only mark them rejected if they aren't already (prevent double notifications if re-running)
+            //     if (app.status !== 'rejected') {
+            //         app.status = 'rejected';
+            //         rejectedIds.push(app.user.toString());
+            //     }
+            // }
         });
         
         // Save all changes (Job status + Applicant statuses)
@@ -594,15 +614,15 @@ exports.assignJob = async (req, res) => {
         });
 
         // B. Notify the Losers
-        rejectedIds.forEach(loserId => {
-            notifications.push({
-                recipient: loserId,
-                type: 'JOB_REJECTED',
-                message: `Update on "${job.projectName}": The position has been filled by another candidate. Thank you for your interest!`,
-                relatedJob: job._id,
-                isRead: false
-            });
-        });
+        // rejectedIds.forEach(loserId => {
+        //     notifications.push({
+        //         recipient: loserId,
+        //         type: 'JOB_REJECTED',
+        //         message: `Update on "${job.projectName}": The position has been filled by another candidate. Thank you for your interest!`,
+        //         relatedJob: job._id,
+        //         isRead: false
+        //     });
+        // });
 
         // C. Send All in Parallel
         if (notifications.length > 0) {
@@ -695,10 +715,10 @@ exports.unassignJob = async (req, res) => {
             
             // B. Restore the "Losers" (Rejected Applicants)
             // We identify anyone marked as 'rejected' and give them a second chance
-            if (app.status === 'rejected') {
-                app.status = 'pending';
-                restoredApplicantIds.push(userIdStr);
-            }
+            // if (app.status === 'rejected') {
+            //     app.status = 'pending';
+            //     restoredApplicantIds.push(userIdStr);
+            // }
             
             // Note: 'shortlisted' or 'pending' users stay as they are
         });
@@ -719,16 +739,16 @@ exports.unassignJob = async (req, res) => {
         }
 
         // B. Notify the Restored Applicants (Good News)
-        if (restoredApplicantIds.length > 0) {
-            restoredApplicantIds.forEach(userId => {
-                notifications.push({
-                    recipient: userId,
-                    type: 'SYSTEM',
-                    message: `Good News! The position for "${job.projectName}" has re-opened and your application is back under review.`,
-                    relatedJob: job._id
-                });
-            });
-        }
+        // if (restoredApplicantIds.length > 0) {
+        //     restoredApplicantIds.forEach(userId => {
+        //         notifications.push({
+        //             recipient: userId,
+        //             type: 'SYSTEM',
+        //             message: `Good News! The position for "${job.projectName}" has re-opened and your application is back under review.`,
+        //             relatedJob: job._id
+        //         });
+        //     });
+        // }
 
         // C. Send All in Parallel
         if (notifications.length > 0) {
@@ -829,5 +849,95 @@ exports.undoShortlistApplicant = async (req, res) => {
     } catch (error) {
         console.error("Undo Shortlist Error:", error);
         res.status(500).json({ message: 'Failed to update applicant' });
+    }
+};
+
+exports.reviewJobPerformance = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { rating, feedback, userId } = req.body; 
+        const jobId = req.params.jobId;
+
+        // 1. Validation
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+        }
+        if (!userId) {
+            console.log(userId)
+            return res.status(400).json({ message: 'User ID is required' });
+        }
+
+        // 2. Find Job
+        const job = await Job.findById(jobId).session(session);
+        if (!job) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Job not found' });
+        }
+
+        // 3. Find the Applicant Subdocument
+        // We search the array for the entry matching the userId
+        const applicantEntry = job.applicants.find(
+            app => app.user.toString() === userId.toString()
+        );
+
+        if (!applicantEntry) {
+            await session.abortTransaction();
+            return res.status(404).json({ message: 'Applicant not found in this job' });
+        }
+
+        // 4. Update the Applicant's Rating
+        applicantEntry.rating = rating;
+        applicantEntry.ratingNote = feedback;
+        applicantEntry.ratedAt = new Date();
+
+        // Optional: Auto-complete job if not already
+        if (job.status !== 'Completed') {
+            job.status = 'Completed';
+        }
+
+        await job.save({ session });
+
+        // 5. AGGREGATION: Recalculate User's Average
+        // We need to Unwind the applicants array to filter by the specific user and ratings
+        const stats = await Job.aggregate([
+            { $unwind: "$applicants" }, // Break array into individual documents
+            { 
+                $match: { 
+                    "applicants.user": new mongoose.Types.ObjectId(userId), 
+                    "applicants.rating": { $ne: null } // Only count rated entries
+                } 
+            },
+            { 
+                $group: { 
+                    _id: "$applicants.user", 
+                    averageRating: { $avg: "$applicants.rating" },
+                    totalJobs: { $sum: 1 }
+                } 
+            }
+        ]).session(session);
+
+        // 6. Update User Profile
+        if (stats.length > 0) {
+            await BaseUser.findByIdAndUpdate(userId, {
+                'jobRatingStats.average': Math.round(stats[0].averageRating * 10) / 10,
+                'jobRatingStats.count': stats[0].totalJobs
+            }, { session });
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.json({ 
+            message: 'Applicant rated successfully', 
+            updatedApplicant: applicantEntry 
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error("Review Job Error:", error);
+        res.status(500).json({ message: 'Failed to save review' });
     }
 };

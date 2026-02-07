@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { usePermissions } from '../../hooks/usePermissions';  
 import { getAllUserTypes } from '../../services/userTypeService'; 
 import { getNotifications } from '../../services/notificationService';
-import { FaSignOutAlt, FaBell, FaUserShield, FaUserCircle, FaNewspaper, FaBriefcase, FaUsers, FaCog } from 'react-icons/fa'; 
+import { FaSignOutAlt, FaBell, FaFileAlt ,FaUserShield, FaUserCircle, FaNewspaper, FaBriefcase, FaUsers, FaCog } from 'react-icons/fa'; 
 
 const AdminNav = () => {
     const location = useLocation();
@@ -16,6 +16,7 @@ const AdminNav = () => {
 
     const [configDropdownOpen, setConfigDropdownOpen] = useState(false);
     const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+    const [jobDropdownOpen, setJobDropdownOpen] = useState(false);
     
     const [userTypes, setUserTypes] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -55,9 +56,11 @@ const AdminNav = () => {
     const isActive = (path) => location.pathname === path;
     const isConfigActive = location.pathname.startsWith('/admin/config');
     const isUserManagementActive = location.pathname.startsWith('/admin/collaborators'); 
+    const isJobsActive = location.pathname.startsWith('/admin/jobs') || location.pathname.startsWith('/admin/applications');
 
     const toggleConfig = () => setConfigDropdownOpen(prevState => !prevState);
     const toggleUser = () => setUserDropdownOpen(prevState => !prevState);
+    const toggleJobs = () => setJobDropdownOpen(prevState => !prevState);
 
     const handleLogout = () => {
         if (window.confirm("Are you sure you want to log out?")) {
@@ -79,10 +82,10 @@ const AdminNav = () => {
                 </NavLink>
             </NavItem>
             
-            {can('admins', 'view') && (
+            {can('config', 'view') && (
                 <Dropdown nav isOpen={configDropdownOpen} toggle={toggleConfig}>
                     <DropdownToggle nav caret className={isConfigActive ? 'active' : ''}>
-                        <FaCog className="me-2" /> Admin
+                        <FaCog className="me-2" />Admin
                     </DropdownToggle>
                     <DropdownMenu>
                         <DropdownItem header>Users</DropdownItem>
@@ -128,12 +131,37 @@ const AdminNav = () => {
                 </DropdownMenu>
             </Dropdown>
             )}
-            {can('jobs', 'view') && (
+            {/* {can('jobs', 'view') && (
             <NavItem>
                 <NavLink tag={Link} to="/admin/jobs" className={isActive('/admin/jobs') || location.pathname.startsWith('/admin/jobs') ? 'active' : ''}>
                     <FaBriefcase className="me-2" /> Jobs
                 </NavLink>
             </NavItem>
+            )} */}
+            {can('jobs', 'view') && (
+                <Dropdown nav isOpen={jobDropdownOpen} toggle={toggleJobs}>
+                    <DropdownToggle nav caret className={isJobsActive ? 'active' : ''}>
+                        <FaBriefcase className="me-2" /> Jobs
+                    </DropdownToggle>
+                    <DropdownMenu>
+                        <DropdownItem header>Job Board</DropdownItem>
+                        <DropdownItem tag={Link} to="/admin/jobs">
+                            Manage Jobs
+                        </DropdownItem>
+                        {/* Optional: Quick link to create job */}
+                        <DropdownItem tag={Link} to="/admin/jobs/create">
+                            + Create New Job
+                        </DropdownItem>
+                        
+                        <DropdownItem divider />
+                        
+                        <DropdownItem header>Candidates</DropdownItem>
+                        
+                        <DropdownItem tag={Link} to="/admin/applications">
+                             Applications
+                        </DropdownItem>
+                    </DropdownMenu>
+                </Dropdown>
             )}
             {can('news', 'view') && (
                 <NavItem>

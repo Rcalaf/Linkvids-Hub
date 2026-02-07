@@ -7,11 +7,33 @@ import {
 import { Link } from 'react-router-dom';
 import { FaPlus, FaEdit, FaSearch, FaTrash, FaNewspaper, FaExternalLinkAlt } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+// 🚨 1. Import Markdown Renderer
+import ReactMarkdown from 'react-markdown';
 
 import Title from '../../../components/Title';
 import Widget from '../../../components/Widget/Widget';
 import { getAllNewsAdmin, deleteNews } from '../../../services/newsService';
 import { usePermissions } from '../../../hooks/usePermissions';
+
+// 🚨 2. Helper Component to render Markdown neatly inside a table cell
+// This strips default paragraph margins to keep the table compact
+const TableMarkdown = ({ content }) => {
+    if (!content) return null;
+    return (
+        <div className="text-muted small" style={{ maxWidth: '450px' }}>
+            <ReactMarkdown
+                components={{
+                    // Override paragraph to remove bottom margin
+                    p: ({node, ...props}) => <p className="mb-1" {...props} />,
+                    // Style links to stand out but not break flow
+                    a: ({node, ...props}) => <span className="text-primary fw-bold" {...props} />
+                }}
+            >
+                {content}
+            </ReactMarkdown>
+        </div>
+    );
+};
 
 export default function NewsList() {
     const { can } = usePermissions();
@@ -27,7 +49,6 @@ export default function NewsList() {
     const [totalPages, setTotalPages] = useState(1);
     const LIMIT = 10;
 
-    // Fetch News whenever filters or page changes
     useEffect(() => {
         fetchNews();
     }, [page, filters]);
@@ -35,9 +56,6 @@ export default function NewsList() {
     const fetchNews = async () => {
         setLoading(true);
         try {
-            // Note: If your backend endpoint /news/admin/all returns a flat array,
-            // you might need to implement slicing here or update backend to accept query params.
-            // This assumes the service/backend mimics the Job structure (accepting params).
             const data = await getAllNewsAdmin({ 
                 page, 
                 limit: LIMIT,
@@ -45,23 +63,18 @@ export default function NewsList() {
                 status: filters.status
             });
             
-            // Handle both flat array (legacy) or paginated response object
             let newsData = [];
             let totalItems = 0;
 
             if (Array.isArray(data)) {
-                // Client-side filtering/pagination fallback if backend sends all
                 let filtered = data;
                 if (filters.status !== 'all') filtered = filtered.filter(n => n.status === filters.status);
                 if (filters.search) filtered = filtered.filter(n => n.title.toLowerCase().includes(filters.search.toLowerCase()));
                 
                 totalItems = filtered.length;
-                
-                // Manual Slice for pagination
                 const startIndex = (page - 1) * LIMIT;
                 newsData = filtered.slice(startIndex, startIndex + LIMIT);
             } else {
-                // Server-side pagination
                 newsData = data.data || [];
                 totalItems = data.metadata?.total || 0;
             }
@@ -82,7 +95,7 @@ export default function NewsList() {
         try {
             await deleteNews(id);
             toast.success("News item deleted");
-            fetchNews(); // Refresh
+            fetchNews(); 
         } catch (e) { 
             toast.error("Failed to delete"); 
         }
@@ -152,7 +165,6 @@ export default function NewsList() {
             )}
 
             <Widget title="All News">
-                {/* FILTERS */}
                 <Row className="mb-4 gx-2">
                     <Col md={5}>
                         <InputGroup>
@@ -197,7 +209,7 @@ export default function NewsList() {
                             <Table hover className="align-middle">
                                 <thead className="bg-light">
                                     <tr>
-                                        <th className="border-top-0">Article Details</th>
+                                        <th className="border-top-0" style={{ width: '55%' }}>Article Details</th>
                                         <th className="border-top-0">Status</th>
                                         <th className="border-top-0">Date</th>
                                         {can('news', 'edit') && (
@@ -209,14 +221,12 @@ export default function NewsList() {
                                     {news.length > 0 ? news.map(item => (
                                         <tr key={item._id}>
                                             <td>
-                                                <div className="fw-bold">
+                                                <div className="fw-bold mb-1">
                                                     {can('news', 'edit') ? (
                                                         <Link 
                                                             to={`/admin/news/${item._id}/edit`}
-                                                            className="text-primary text-decoration-none fw-bold"
-                                                            style={{ cursor: 'pointer' }}
-                                                            onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
-                                                            onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                                                            className="text-dark text-decoration-none"
+                                                            style={{ fontSize: '1.05rem' }}
                                                         >
                                                             {item.title}
                                                         </Link>
@@ -224,18 +234,23 @@ export default function NewsList() {
                                                         item.title
                                                     )}
                                                 </div>
-                                                <small className="text-muted d-block text-truncate" style={{ maxWidth: '300px' }}>
-                                                    {item.excerpt}
-                                                </small>
+
+                                                {/* 🚨 3. Use the Markdown Component here */}
+                                                <TableMarkdown content={item.excerpt} />
+
                                                 {item.linkUrl && (
-                                                    <small className="text-info">
-                                                        <FaExternalLinkAlt size={10} className="me-1"/> 
-                                                        External Link
-                                                    </small>
+                                                    <div className="mt-1">
+                                                        <a href={item.linkUrl} target="_blank" rel="noopener noreferrer" className="text-info small text-decoration-none">
+                                                            <FaExternalLinkAlt size={10} className="me-1"/> 
+                                                            External Link
+                                                        </a>
+                                                    </div>
                                                 )}
                                             </td>
                                             <td>
-                                                <Badge color={getStatusBadge(item.status)}>{item.status}</Badge>
+                                                <Badge color={getStatusBadge(item.status)} className="p-2">
+                                                    {item.status}
+                                                </Badge>
                                             </td>
                                             <td>
                                                 <small className="text-muted">
@@ -258,7 +273,6 @@ export default function NewsList() {
                                             )}
                                         </tr>
                                     )) : (
-                                        /* 🚨 EMPTY STATE 🚨 */
                                         <tr>
                                             <td colSpan="4" className="text-center p-5 text-muted">
                                                 <FaNewspaper className="mb-3 display-4 opacity-25" />

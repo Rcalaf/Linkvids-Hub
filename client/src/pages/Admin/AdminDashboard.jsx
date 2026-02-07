@@ -65,6 +65,7 @@ export default function Dashboard() {
                         title="Total Applications" 
                         value={stats.jobs.totalApplications} 
                         color="success" 
+                        link="/admin/applications"
                     />
                 </Col>
                 <Col md={3} sm={6} className="mb-3">
@@ -73,7 +74,7 @@ export default function Dashboard() {
                         title="Collaborators" 
                         value={stats.users.collaborators} 
                         color="info" 
-                        link="/admin/users"
+                        link="/admin/collaborators"
                     />
                 </Col>
                 <Col md={3} sm={6} className="mb-3">

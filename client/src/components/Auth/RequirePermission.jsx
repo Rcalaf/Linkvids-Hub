@@ -6,7 +6,7 @@ const RequirePermission = ({ module, level = 'view', layout = null }) => {
     const location = useLocation();
     
     if (!can(module, level)) {
-        // Redirect to dashboard (or 403 page) if they don't have permission
+        // TODO: redirect to unauthorized page instead of admin dashboard...
         return <Navigate to="/admin/" state={{ from: location }} replace />;
     }
 

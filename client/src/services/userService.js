@@ -101,6 +101,10 @@ export const getDashboardStats = async () => {
     return response.data;
 };
 
+export const rateUser = async (userId, rating, notes) => {
+    const response = await api.put(`${USER_URL}/${userId}/rate`, { rating, notes });
+    return response.data;
+};
 
 
 // You might also add:
