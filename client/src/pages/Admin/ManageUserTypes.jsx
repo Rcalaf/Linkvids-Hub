@@ -1,270 +1,275 @@
-// client/src/pages/Admin/ManageUserTypes.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Table, Button, Form, FormGroup, Label, Input } from 'reactstrap';
+import { 
+    Container, Row, Col, Table, Button, Form, FormGroup, Label, Input, Alert, Badge 
+} from 'reactstrap';
 import { toast } from 'react-toastify';
+import { FaEdit, FaTrash, FaPlus, FaCheck, FaTimes } from 'react-icons/fa';
+
 import Widget from '../../components/Widget/Widget';
 import Title from '../../components/Title';
-import { getAllAttributes } from '../../services/attributeService';
-import { getAllUserTypes, createUserType, updateUserType, deleteUserType } from '../../services/userTypeService';
 
-const PARENT_TYPES = ['Collaborator', 'Agency'];
+// Services
+import { 
+    getAllUserTypes, 
+    createUserType, 
+    updateUserType, 
+    deleteUserType 
+} from '../../services/userTypeService'; 
 
-const initialConfigState = {
-    slug: '',
+// 🚨 1. Import Permissions Hook
+import { usePermissions } from '../../hooks/usePermissions';
+
+const initialFormState = {
     name: '',
-    parentType: PARENT_TYPES[0],
-    fields: [],
+    slug: '',
+    description: '',
+    isAgency: false, // Checkbox for agency type
     isEditing: false,
+    _id: null
 };
 
 export default function ManageUserTypes() {
+    // 🚨 2. Initialize Permissions
+    const { can } = usePermissions();
+    const canEdit = can('config', 'edit'); // Reusing 'config' permission for User Types as well
+
     const [userTypes, setUserTypes] = useState([]);
-    const [availableAttributes, setAvailableAttributes] = useState([]);
-    const [formData, setFormData] = useState(initialConfigState);
+    const [formData, setFormData] = useState(initialFormState);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchData();
+        loadData();
     }, []);
 
-    const fetchData = async () => {
+    const loadData = async () => {
         try {
-            const [types, attributes] = await Promise.all([
-                getAllUserTypes(),
-                getAllAttributes()
-            ]);
-            setUserTypes(types);
-            setAvailableAttributes(attributes);
+            const data = await getAllUserTypes();
+            setUserTypes(data);
         } catch (error) {
-            toast.error("Failed to load configuration data.");
-            console.error(error);
+            toast.error("Failed to load user types");
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-    
-    // --- Field Array Management ---
-
-    const handleAddField = () => {
+        const { name, value, type, checked } = e.target;
         setFormData(prev => ({
             ...prev,
-            fields: [...prev.fields, { 
-                attributeSlug: availableAttributes[0]?.slug || '', 
-                label: '', 
-                required: false, 
-                section: '' 
-            }]
+            [name]: type === 'checkbox' ? checked : value
         }));
     };
 
-    const handleFieldChange = (index, fieldName, value) => {
-        const newFields = formData.fields.map((field, i) => {
-            if (i === index) {
-                return { ...field, [fieldName]: value };
-            }
-            return field;
+    // Auto-generate slug from name if creating new
+    const handleNameChange = (e) => {
+        const val = e.target.value;
+        setFormData(prev => ({
+            ...prev,
+            name: val,
+            slug: !prev.isEditing ? val.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '') : prev.slug
+        }));
+    };
+
+    const handleEditClick = (type) => {
+        // 🚨 Security Check
+        if (!canEdit) return;
+
+        setFormData({
+            ...type,
+            isEditing: true
         });
-        setFormData(prev => ({ ...prev, fields: newFields }));
+        
+        // Scroll to form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleRemoveField = (index) => {
-        setFormData(prev => ({
-            ...prev,
-            fields: prev.fields.filter((_, i) => i !== index)
-        }));
-    };
-
-    // --- CRUD Operations ---
-
-    const handleEditClick = (config) => {
-        setFormData({ ...config, isEditing: true });
+    const handleCancel = () => {
+        setFormData(initialFormState);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Basic validation check
-        if (!formData.fields.length) {
-            return toast.error("A user type must have at least one field.");
+        // 🚨 Security Check
+        if (!canEdit) {
+            return toast.error("You do not have permission to modify User Types.");
         }
 
         try {
             if (formData.isEditing) {
-                await updateUserType(formData.slug, formData);
-                toast.success(`User Type '${formData.name}' updated.`);
+                await updateUserType(formData._id, formData);
+                toast.success("User Type updated successfully");
             } else {
                 await createUserType(formData);
-                toast.success(`New User Type '${formData.name}' created.`);
+                toast.success("User Type created successfully");
             }
-            
-            setFormData(initialConfigState);
-            await fetchData(); 
+            setFormData(initialFormState);
+            loadData();
         } catch (error) {
-            const msg = error.response?.data?.message || "An unexpected error occurred.";
-            toast.error(`Operation failed: ${msg}`);
-            console.error(error);
+            const msg = error.response?.data?.message || "Operation failed";
+            toast.error(msg);
         }
     };
 
-    const handleDelete = async (slug, name) => {
-        if (!window.confirm(`WARNING: Deleting '${name}' will remove its dynamic schema. Continue?`)) return;
+    const handleDelete = async (id, name) => {
+        // 🚨 Security Check
+        if (!canEdit) return;
 
+        if (!window.confirm(`Delete User Type "${name}"? This may affect users assigned to this role.`)) return;
+        
         try {
-            await deleteUserType(slug);
-            toast.success(`User Type '${name}' deleted.`);
-            await fetchData();
+            await deleteUserType(id);
+            toast.success("User Type deleted");
+            loadData();
         } catch (error) {
-            const msg = error.response?.data?.message || "An unexpected error occurred.";
-            toast.error(`Deletion failed: ${msg}`);
-            console.error(error);
+            toast.error("Failed to delete user type");
         }
     };
 
     return (
         <Container fluid>
-            <Title title="Admin: Dynamic User Type Configuration" />
+            <Title title="Manage User Types & Roles" />
 
-            <Row className="mb-4">
-                <Col md={12}>
-                    <Widget title={formData.isEditing ? `Edit Type: ${formData.name}` : "Create New User Type"}>
-                        <Form onSubmit={handleSubmit}>
-                            <Row>
-                                <Col md={4}>
-                                    <FormGroup>
-                                        <Label for="slug">Slug (Unique Key)</Label>
-                                        <Input
-                                            type="text" name="slug" id="slug"
-                                            value={formData.slug} onChange={handleChange}
-                                            disabled={formData.isEditing}
-                                            placeholder="e.g., drone-pilot" required
-                                        />
-                                    </FormGroup>
-                                </Col>
-                                <Col md={4}>
-                                    <FormGroup>
-                                        <Label for="name">Display Name</Label>
-                                        <Input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required />
-                                    </FormGroup>
-                                </Col>
-                                <Col md={4}>
-                                    <FormGroup>
-                                        <Label for="parentType">Parent Type (Discriminator)</Label>
-                                        <Input type="select" name="parentType" id="parentType" value={formData.parentType} onChange={handleChange} required>
-                                            {PARENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                                        </Input>
-                                    </FormGroup>
-                                </Col>
-                            </Row>
-
-                            <hr />
-                            <h5>Schema Fields</h5>
-                            {formData.fields.map((field, index) => (
-                                <Row key={index} className="align-items-end mb-2 border-bottom pb-2">
-                                    <Col md={3}>
+            {/* 🚨 3. Conditional Rendering: Form */}
+            {canEdit ? (
+                <Row className="mb-4">
+                    <Col md={12}>
+                        <Widget title={formData.isEditing ? `Edit Role: ${formData.name}` : "Create New Role"}>
+                            <Form onSubmit={handleSubmit}>
+                                <Row>
+                                    <Col md={4}>
                                         <FormGroup>
-                                            <Label>Attribute Source</Label>
+                                            <Label>Role Name</Label>
                                             <Input 
-                                                type="select" 
-                                                value={field.attributeSlug} 
-                                                onChange={(e) => handleFieldChange(index, 'attributeSlug', e.target.value)}
-                                                required
-                                            >
-                                                {availableAttributes.map(attr => (
-                                                    <option key={attr.slug} value={attr.slug}>
-                                                        {attr.name} ({attr.fieldType})
-                                                    </option>
-                                                ))}
-                                            </Input>
-                                        </FormGroup>
-                                    </Col>
-                                    <Col md={3}>
-                                        <FormGroup>
-                                            <Label>Field Label</Label>
-                                            <Input 
-                                                type="text" 
-                                                value={field.label} 
-                                                onChange={(e) => handleFieldChange(index, 'label', e.target.value)}
-                                                placeholder="e.g., Insta Handle"
-                                                required
+                                                required 
+                                                name="name" 
+                                                value={formData.name} 
+                                                onChange={handleNameChange} 
+                                                placeholder="e.g. Video Editor"
                                             />
                                         </FormGroup>
                                     </Col>
-                                    <Col md={3}>
+                                    <Col md={4}>
                                         <FormGroup>
-                                            <Label>Form Section</Label>
+                                            <Label>Slug (ID)</Label>
                                             <Input 
-                                                type="text" 
-                                                value={field.section} 
-                                                onChange={(e) => handleFieldChange(index, 'section', e.target.value)}
-                                                placeholder="e.g., Contact Info"
+                                                required 
+                                                name="slug" 
+                                                value={formData.slug} 
+                                                onChange={handleChange} 
+                                                disabled={formData.isEditing} // Slugs usually shouldn't change after creation
+                                                placeholder="e.g. video-editor"
                                             />
                                         </FormGroup>
                                     </Col>
-                                    <Col md={1}>
-                                        <FormGroup check>
-                                            <Input 
-                                                type="checkbox" 
-                                                checked={field.required} 
-                                                onChange={(e) => handleFieldChange(index, 'required', e.target.checked)}
-                                            />
-                                            <Label check>Required</Label>
+                                    <Col md={4}>
+                                        <FormGroup>
+                                            <Label>Role Category</Label>
+                                            <div className="pt-2">
+                                                <FormGroup check inline>
+                                                    <Input 
+                                                        type="checkbox" 
+                                                        name="isAgency" 
+                                                        checked={formData.isAgency} 
+                                                        onChange={handleChange} 
+                                                    />
+                                                    <Label check>Is Agency?</Label>
+                                                </FormGroup>
+                                            </div>
+                                            <small className="text-muted d-block mt-1">
+                                                Check this if this role represents a company/agency rather than an individual.
+                                            </small>
                                         </FormGroup>
-                                    </Col>
-                                    <Col md={2}>
-                                        <Button color="danger" size="sm" onClick={() => handleRemoveField(index)}>Remove</Button>
                                     </Col>
                                 </Row>
-                            ))}
-                            <div className="d-flex justify-content-between mt-3">
-                                <Button color="info" type="button" onClick={handleAddField}>
-                                    + Add New Field
-                                </Button>
-                                <div>
+                                <FormGroup>
+                                    <Label>Description</Label>
+                                    <Input 
+                                        type="textarea" 
+                                        name="description" 
+                                        value={formData.description} 
+                                        onChange={handleChange} 
+                                        placeholder="Describe the responsibilities of this role..."
+                                    />
+                                </FormGroup>
+
+                                <div className="d-flex justify-content-end gap-2">
                                     {formData.isEditing && (
-                                        <Button color="secondary" onClick={() => setFormData(initialConfigState)} className="me-2">
-                                            Cancel Edit
+                                        <Button color="secondary" outline onClick={handleCancel}>
+                                            Cancel
                                         </Button>
                                     )}
                                     <Button color="primary" type="submit">
-                                        {formData.isEditing ? 'Save Configuration' : 'Create User Type'}
+                                        {formData.isEditing ? <><FaCheck className="me-2"/> Save Changes</> : <><FaPlus className="me-2"/> Create Role</>}
                                     </Button>
                                 </div>
-                            </div>
-                        </Form>
-                    </Widget>
-                </Col>
-            </Row>
+                            </Form>
+                        </Widget>
+                    </Col>
+                </Row>
+            ) : (
+                <Row className="mb-4">
+                    <Col>
+                        <Alert color="info">
+                            You are viewing User Roles in <strong>Read-Only</strong> mode.
+                        </Alert>
+                    </Col>
+                </Row>
+            )}
 
             <Row>
                 <Col md={12}>
-                    <Widget title="Existing Dynamic User Types">
-                        <Table striped responsive>
-                            <thead>
-                                <tr>
-                                    <th>Slug</th>
-                                    <th>Name</th>
-                                    <th>Parent Type</th>
-                                    <th>Fields Count</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {userTypes.map(type => (
-                                    <tr key={type.slug}>
-                                        <td>{type.slug}</td>
-                                        <td>{type.name}</td>
-                                        <td>{type.parentType}</td>
-                                        <td>{type.fields.length}</td>
-                                        <td>
-                                            <Button size="sm" color="info" className="me-2" onClick={() => handleEditClick(type)}>Edit Schema</Button>
-                                            <Button size="sm" color="danger" onClick={() => handleDelete(type.slug, type.name)}>Delete</Button>
-                                        </td>
+                    <Widget title={`Existing Roles (${userTypes.length})`}>
+                        {loading ? <p>Loading...</p> : (
+                            <Table hover responsive className="align-middle">
+                                <thead className="bg-light">
+                                    <tr>
+                                        <th>Role Name</th>
+                                        <th>Slug</th>
+                                        <th>Category</th>
+                                        <th>Description</th>
+                                        {/* 🚨 4. Conditional Header */}
+                                        {canEdit && <th className="text-end">Actions</th>}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </Table>
+                                </thead>
+                                <tbody>
+                                    {userTypes.map(type => (
+                                        <tr key={type._id}>
+                                            <td className="fw-bold">{type.name}</td>
+                                            <td><Badge color="light" className="text-dark border">{type.slug}</Badge></td>
+                                            <td>
+                                                {type.isAgency ? 
+                                                    <Badge color="warning" className="text-dark">Agency</Badge> : 
+                                                    <Badge color="info">Collaborator</Badge>
+                                                }
+                                            </td>
+                                            <td className="text-muted small">
+                                                {type.description || '-'}
+                                            </td>
+                                            
+                                            {/* 🚨 5. Conditional Actions */}
+                                            {canEdit && (
+                                                <td className="text-end">
+                                                    <Button size="sm" color="light" className="me-2 border" onClick={() => handleEditClick(type)} title="Edit">
+                                                        <FaEdit className="text-secondary"/>
+                                                    </Button>
+                                                    <Button size="sm" color="light" className="border" onClick={() => handleDelete(type._id, type.name)} title="Delete">
+                                                        <FaTrash className="text-danger"/>
+                                                    </Button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                    {userTypes.length === 0 && (
+                                        <tr>
+                                            <td colSpan={canEdit ? 5 : 4} className="text-center p-4 text-muted">
+                                                No user roles defined yet.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </Table>
+                        )}
                     </Widget>
                 </Col>
             </Row>

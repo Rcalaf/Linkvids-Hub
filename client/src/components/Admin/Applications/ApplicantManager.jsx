@@ -16,7 +16,13 @@ import {
     unrejectApplicant, shortlistApplicant, undoShortlistApplicant 
 } from '../../../services/jobService';
 
-export default function ApplicantManager({ jobId, currentStatus, assignedToId, onAssignComplete }) {
+export default function ApplicantManager({ 
+    jobId, 
+    currentStatus, 
+    assignedToId, 
+    positionsAvailable = 1, 
+    onAssignComplete 
+}) {
     const [applicants, setApplicants] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -40,26 +46,43 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
         }
     };
 
+    // --- MULTI-HIRE CALCULATIONS ---
+    // Count how many are currently hired (accepted/assigned)
+    const hiredCount = applicants.filter(app => 
+        app.status === 'accepted'
+    ).length;
+
+    // Check if the quota is reached
+    const isJobFull = hiredCount >= positionsAvailable;
+
+
     // --- ASSIGNMENT HANDLERS ---
     const handleAssign = async (userId, userName) => {
-        if (!window.confirm(`Are you sure you want to assign this job to ${userName}?`)) return;
+        if (!window.confirm(`Are you sure you want to hire ${userName}?`)) return;
         try {
             await assignJob(jobId, userId);
-            setApplicants(prev => prev.map(app => 
-                app.userId === userId ? { ...app, status: 'accepted' } : { ...app, status: 'rejected' }
-            ));
-            toast.success(`Job assigned to ${userName}!`);
+            
+            // 🚨 RELOAD DATA: The backend might auto-reject others if this was the last slot.
+            // It is safer to reload the list than to manually map the state here.
+            await loadApplicants();
+            
+            toast.success(`${userName} hired!`);
             if (onAssignComplete) onAssignComplete(); 
         } catch (error) {
-            toast.error("Failed to assign job.");
+            toast.error(error.response?.data?.message || "Failed to assign job.");
         }
     };
 
-    const handleUnassign = async () => {
-        if (!window.confirm("Cancel assignment? Job will reopen.")) return;
+  
+    const handleUnassign = async (userId) => {
+        if (!window.confirm("Cancel assignment? This slot will reopen.")) return;
         try {
-            await unassignJob(jobId);
-            setApplicants(prev => prev.map(app => ({ ...app, status: 'pending' })));
+
+            await unassignJob(jobId, userId);
+            
+            // Reload to reflect status changes (Job might go from Assigned -> Open)
+            await loadApplicants();
+            
             toast.info("Assignment cancelled.");
             if (onAssignComplete) onAssignComplete();
         } catch (error) {
@@ -128,9 +151,13 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
         <Widget title={
             <div className="d-flex justify-content-between align-items-center">
                 <span>Applicants ({applicants.length})</span>
-                <div>
-                    {currentStatus === 'Assigned' && <Badge color="primary" className="me-1">Job Assigned</Badge>}
-                    {currentStatus === 'Completed' && <Badge color="success">Job Completed</Badge>}
+                <div className="d-flex align-items-center gap-2">
+                    {/* 🚨 VISUAL INDICATOR FOR POSITIONS */}
+                    <Badge color={isJobFull ? "success" : "info"} className="px-3 py-2">
+                        Positions: {hiredCount} / {positionsAvailable}
+                    </Badge>
+
+                    {currentStatus === 'Completed' && <Badge color="dark">Completed</Badge>}
                 </div>
             </div>
         }>
@@ -156,12 +183,13 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
                                 const userAvatar = application.profile_picture || 'https://placehold.co/100?text=User';
                                 const userLocation = application.city ? `${application.city}, ${application.country}` : '-';
 
-                                const isWinner = (assignedToId && assignedToId.toString() === userId.toString()) || application.status === 'accepted' || application.status === 'assigned';
+                                // Check status
+                                const isWinner = application.status === 'accepted';
                                 const isRejected = application.status === 'rejected'; 
                                 const isShortlisted = application.status === 'shortlisted';
                                 
                                 const isJobCompleted = currentStatus === 'Completed';
-                                const isJobActive = currentStatus === 'Assigned';
+                                // Note: In multi-hire, we rely on individual status mostly, not just job status
 
                                 let rowClass = "";
                                 if (isWinner) rowClass = "table-success";
@@ -200,43 +228,27 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
                                         <td>{application.city ? <><FaMapMarkerAlt className="text-muted me-1" /> {userLocation}</> : <span className="text-muted">-</span>}</td>
 
                                         <td className="text-end">
+                                            {/* SCENARIO 1: JOB COMPLETED (Show Ratings) */}
                                             {isJobCompleted ? (
                                                 isWinner ? (
-                                                    // 🚨 UPDATED RATING LAYOUT
                                                     <div className="d-flex align-items-center justify-content-end gap-2">
                                                         {application.rating ? (
                                                             <>
-                                                                {/* 1. Comment (Left) */}
                                                                 {application.ratingNote && (
                                                                     <div className="text-muted small fst-italic text-end border-end pe-2" style={{ maxWidth: '200px', lineHeight: '1.2' }}>
                                                                         <FaQuoteLeft size={8} className="me-1 opacity-50" />
                                                                         {application.ratingNote}
                                                                     </div>
                                                                 )}
-                                                                
-                                                                {/* 2. Stars (Middle) */}
                                                                 <div className="d-flex align-items-center text-warning fw-bold border px-2 py-1 rounded bg-white shadow-sm">
                                                                     <FaStar className="me-1" /> {application.rating}/5
                                                                 </div>
-
-                                                                {/* 3. Edit Button (Right) */}
-                                                                <Button 
-                                                                    color="light" 
-                                                                    size="sm" 
-                                                                    className="text-secondary border-0 p-1"
-                                                                    title="Edit Rating"
-                                                                    onClick={() => handleRateClick(application)}
-                                                                >
+                                                                <Button color="light" size="sm" className="text-secondary border-0 p-1" onClick={() => handleRateClick(application)}>
                                                                     <FaPen size={12} />
                                                                 </Button>
                                                             </>
                                                         ) : (
-                                                            <Button 
-                                                                color="warning" 
-                                                                size="sm" 
-                                                                className="fw-bold shadow-sm"
-                                                                onClick={() => handleRateClick(application)}
-                                                            >
+                                                            <Button color="warning" size="sm" className="fw-bold shadow-sm" onClick={() => handleRateClick(application)}>
                                                                 <FaStar className="me-1" /> Rate Work
                                                             </Button>
                                                         )}
@@ -245,21 +257,22 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
                                                     <span className="text-muted small">Not Selected</span>
                                                 )
                                             ) 
-                                            : isJobActive ? (
-                                                isWinner ? (
-                                                    <div className="d-flex justify-content-end align-items-center gap-2">
-                                                        <span className="text-success fw-bold me-2"><FaCheckCircle/> Working</span>
-                                                        <Button color="danger" size="sm" outline title="Unassign" onClick={handleUnassign}>
-                                                            <FaUndo /> Unassign
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-muted small">Not Selected</span>
-                                                )
-                                            ) 
+                                            // SCENARIO 2: JOB ACTIVE / OPEN
                                             : (
                                                 <div className="d-flex justify-content-end gap-2">
-                                                    {isRejected ? (
+                                                    {isWinner ? (
+                                                        <div className="d-flex justify-content-end align-items-center gap-2">
+                                                            <span className="text-success fw-bold me-2"><FaCheckCircle/> Working</span>
+                                                            <Button 
+                                                                color="danger" size="sm" outline 
+                                                                title="Unassign" 
+                                                                // 🚨 Pass userId to handle specific unassignment
+                                                                onClick={() => handleUnassign(userId)}
+                                                            >
+                                                                <FaUndo /> Unassign
+                                                            </Button>
+                                                        </div>
+                                                    ) : isRejected ? (
                                                          <div className="d-flex justify-content-end align-items-center gap-2">
                                                             <span className="text-muted small me-2"><FaBan className="me-1" /> Rejected</span>
                                                             <Button color="secondary" size="sm" outline title="Restore" onClick={() => handleUnreject(userId, userName)}><FaUndo /></Button>
@@ -282,7 +295,13 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
                                                                 </Button>
                                                             )}
 
-                                                            <Button color="success" size="sm" outline onClick={() => handleAssign(userId, userName)} title="Assign">
+                                                            <Button 
+                                                                color="success" size="sm" outline 
+                                                                title="Assign" 
+                                                                // 🚨 DISABLE if quota is reached
+                                                                disabled={isJobFull} 
+                                                                onClick={() => handleAssign(userId, userName)}
+                                                            >
                                                                 <FaCheck /> Assign
                                                             </Button>
                                                             <Button color="danger" size="sm" outline onClick={() => handleReject(userId, userName)} title="Reject">
@@ -301,7 +320,6 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
                 </div>
             )}
 
-            {/* RATING MODAL */}
             {ratingCandidate && (
                 <RatePerformanceModal 
                     isOpen={rateModalOpen}
@@ -309,11 +327,8 @@ export default function ApplicantManager({ jobId, currentStatus, assignedToId, o
                     jobId={jobId}
                     applicantName={ratingCandidate.name || ratingCandidate.username}
                     applicantId={ratingCandidate.userId} 
-                    
-                    // Optional: Pass these if your Modal supports pre-filling for edits
                     initialRating={ratingCandidate.rating}
-                    initialFeedback={ratingCandidate.ratingFeedback}
-                    
+                    initialFeedback={ratingCandidate.ratingNote}
                     onSuccess={handleRateSuccess}
                 />
             )}

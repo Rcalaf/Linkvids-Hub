@@ -1,84 +1,114 @@
-// client/src/pages/Admin/Jobs/JobList.jsx
 import React, { useState, useEffect } from 'react';
 import { 
     Container, Table, Button, Badge, Input, Row, Col, 
     InputGroup, InputGroupText, Pagination, PaginationItem, PaginationLink 
 } from 'reactstrap';
-import { Link } from 'react-router-dom';
-import { FaPlus, FaEdit, FaSearch, FaBriefcase, FaTrash, FaFilter, FaUsers } from 'react-icons/fa';
+import { Link, useLocation } from 'react-router-dom';
+import { FaPlus, FaEdit, FaSearch, FaBriefcase, FaTrash, FaUsers } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
 import Title from '../../../components/Title';
 import Widget from '../../../components/Widget/Widget';
 import { getAllJobs, deleteJob } from '../../../services/jobService';
-import { getAllUserTypes } from '../../../services/userTypeService'; // 🚨 Import to populate role filter
+import { getAllUserTypes } from '../../../services/userTypeService'; 
 import { usePermissions } from '../../../hooks/usePermissions';
 
 export default function JobList() {
     const { can } = usePermissions();
+    const location = useLocation();
+    
+    // 🚨 1. Helper to read URL params immediately
+    const getInitialFilters = () => {
+        const params = new URLSearchParams(location.search);
+        return {
+            search: '',
+            status: params.get('status') || 'all', // Reads 'Open' directly from URL on first load
+            targetRole: 'all'
+        };
+    };
+
     const [jobs, setJobs] = useState([]);
     const [userTypes, setUserTypes] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Filter & Pagination State
-    const [filters, setFilters] = useState({
-        search: '',
-        status: 'all',
-        targetRole: 'all'
-    });
+    // Initialize state using the helper function
+    const [filters, setFilters] = useState(getInitialFilters);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const LIMIT = 10; // Items per page
+    const LIMIT = 10; 
 
-    // 1. Load User Types once on mount (for filter dropdown)
+    // 🚨 2. Listen for URL changes (Navigation from Dashboard)
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const statusParam = params.get('status') || 'all';
+
+        // Only update if it actually changed to prevent loops
+        if (filters.status !== statusParam) {
+            setFilters(prev => ({ ...prev, status: statusParam }));
+            setPage(1);
+        }
+    }, [location.search]);
+
+    // Load User Types (Run once)
     useEffect(() => {
         const loadTypes = async () => {
             try {
                 const types = await getAllUserTypes();
                 setUserTypes(types);
             } catch (e) {
-                console.error("Failed to load user types for filter");
+                console.error("Failed to load user types");
             }
         };
         loadTypes();
     }, []);
 
-    // 2. Fetch Jobs whenever filters or page changes
+    // 🚨 3. Fetch Jobs with Race Condition Protection
     useEffect(() => {
+        let isActive = true; // Flag to track if this request is still valid
+
+        const fetchJobs = async () => {
+            setLoading(true);
+            try {
+                const result = await getAllJobs({ 
+                    page, 
+                    limit: LIMIT,
+                    search: filters.search,
+                    status: filters.status,
+                    targetRole: filters.targetRole
+                });
+                
+                // Only update state if this is the most recent request
+                if (isActive) {
+                    setJobs(result.data);
+                    const total = result.metadata?.total || 0;
+                    setTotalPages(Math.ceil(total / LIMIT));
+                }
+
+            } catch (error) {
+                if (isActive) toast.error("Failed to load jobs");
+            } finally {
+                if (isActive) setLoading(false);
+            }
+        };
+
         fetchJobs();
-    }, [page, filters]); // Reload on page or filter change
 
-    const fetchJobs = async () => {
-        setLoading(true);
-        try {
-            const result = await getAllJobs({ 
-                page, 
-                limit: LIMIT,
-                search: filters.search,
-                status: filters.status,
-                targetRole: filters.targetRole
-            });
-            
-            setJobs(result.data);
-            
-            // Calculate total pages based on metadata
-            // Assuming result.metadata.total exists. If backend returns simple array, adjustment needed.
-            const total = result.metadata?.total || 0;
-            setTotalPages(Math.ceil(total / LIMIT));
+        // Cleanup function: If dependencies change (filters/page update), 
+        // set isActive = false so the previous "slow" request is ignored.
+        return () => {
+            isActive = false;
+        };
 
-        } catch (error) {
-            toast.error("Failed to load jobs");
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [page, filters]); 
 
     const handleDelete = async (jobId) => {
         if (!window.confirm("Are you sure you want to delete this job?")) return;
         try {
             await deleteJob(jobId);
             toast.success("Job deleted");
-            fetchJobs(); // Refresh to update pagination counts
+            // Re-trigger fetch by toggling a temp state or just calling fetch (simplified here)
+            // Ideally, we'd refactor fetchJobs outside, but for now a reload works:
+            window.location.reload(); 
         } catch (error) {
             toast.error("Failed to delete job");
         }
@@ -87,7 +117,7 @@ export default function JobList() {
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
-        setPage(1); // Reset to page 1 on filter change
+        setPage(1); 
     };
 
     const getStatusBadge = (status) => {
@@ -101,38 +131,23 @@ export default function JobList() {
         }
     };
 
-    // Helper to render pagination pages
     const renderPagination = () => {
         if (totalPages <= 1) return null;
-
         let items = [];
         for (let i = 1; i <= totalPages; i++) {
             items.push(
                 <PaginationItem active={i === page} key={i}>
-                    <PaginationLink onClick={() => setPage(i)}>
-                        {i}
-                    </PaginationLink>
+                    <PaginationLink onClick={() => setPage(i)}>{i}</PaginationLink>
                 </PaginationItem>
             );
         }
-
         return (
-            <Pagination aria-label="Page navigation" className="d-flex justify-content-center mt-4">
-                <PaginationItem disabled={page <= 1}>
-                    <PaginationLink first onClick={() => setPage(1)} />
-                </PaginationItem>
-                <PaginationItem disabled={page <= 1}>
-                    <PaginationLink previous onClick={() => setPage(page - 1)} />
-                </PaginationItem>
-                
+            <Pagination className="d-flex justify-content-center mt-4">
+                <PaginationItem disabled={page <= 1}><PaginationLink first onClick={() => setPage(1)} /></PaginationItem>
+                <PaginationItem disabled={page <= 1}><PaginationLink previous onClick={() => setPage(page - 1)} /></PaginationItem>
                 {items}
-
-                <PaginationItem disabled={page >= totalPages}>
-                    <PaginationLink next onClick={() => setPage(page + 1)} />
-                </PaginationItem>
-                <PaginationItem disabled={page >= totalPages}>
-                    <PaginationLink last onClick={() => setPage(totalPages)} />
-                </PaginationItem>
+                <PaginationItem disabled={page >= totalPages}><PaginationLink next onClick={() => setPage(page + 1)} /></PaginationItem>
+                <PaginationItem disabled={page >= totalPages}><PaginationLink last onClick={() => setPage(totalPages)} /></PaginationItem>
             </Pagination>
         );
     };
@@ -142,7 +157,6 @@ export default function JobList() {
             <Title title="Job Management" />
             {can('jobs', 'edit') && (
             <div className="d-flex justify-content-between align-items-center mb-4">
-                
                 <Link to="/admin/jobs/create">
                     <Button color="primary">
                         <FaPlus className="me-2" /> Post New Job
@@ -156,38 +170,18 @@ export default function JobList() {
                     <Col md={4}>
                         <InputGroup>
                             <InputGroupText className="bg-white"><FaSearch /></InputGroupText>
-                            <Input 
-                                placeholder="Search by name..." 
-                                name="search"
-                                value={filters.search}
-                                onChange={(e) => {
-                                    handleFilterChange(e);
-                                    // Debouncing isn't implemented here for simplicity, 
-                                    // but state update triggers fetch via useEffect
-                                }}
-                            />
+                            <Input placeholder="Search by name..." name="search" value={filters.search} onChange={handleFilterChange} />
                         </InputGroup>
                     </Col>
                     <Col md={3}>
-                        <Input 
-                            type="select" 
-                            name="targetRole" 
-                            value={filters.targetRole} 
-                            onChange={handleFilterChange}
-                        >
+                        <Input type="select" name="targetRole" value={filters.targetRole} onChange={handleFilterChange}>
                             <option value="all">All Roles</option>
-                            {userTypes.map(t => (
-                                <option key={t.slug} value={t.slug}>{t.name}</option>
-                            ))}
+                            {userTypes.map(t => <option key={t.slug} value={t.slug}>{t.name}</option>)}
                         </Input>
                     </Col>
                     <Col md={3}>
-                        <Input 
-                            type="select" 
-                            name="status" 
-                            value={filters.status} 
-                            onChange={handleFilterChange}
-                        >
+                        {/* 🚨 Ensure the value binds correctly to state */}
+                        <Input type="select" name="status" value={filters.status} onChange={handleFilterChange}>
                             <option value="all">All Statuses</option>
                             <option value="Open">Open</option>
                             <option value="Draft">Draft</option>
@@ -197,17 +191,7 @@ export default function JobList() {
                         </Input>
                     </Col>
                     <Col md={2}>
-                        <Button 
-                            color="secondary" 
-                            outline 
-                            block 
-                            onClick={() => {
-                                setFilters({ search: '', status: 'all', targetRole: 'all' });
-                                setPage(1);
-                            }}
-                        >
-                            Clear
-                        </Button>
+                        <Button color="secondary" outline block onClick={() => { setFilters({ search: '', status: 'all', targetRole: 'all' }); setPage(1); }}>Clear</Button>
                     </Col>
                 </Row>
 
@@ -218,42 +202,37 @@ export default function JobList() {
                                 <thead className="bg-light">
                                     <tr>
                                         <th className="border-top-0">Project</th>
-                                        <th className="border-top-0 text-center">Applicants</th>
+                                        <th className="border-top-0 text-center">Applicants / Spots</th>
                                         <th className="border-top-0">Role</th>
                                         <th className="border-top-0">Rate</th>
                                         <th className="border-top-0">Dates</th>
                                         <th className="border-top-0">Status</th>
-                                        {can('jobs', 'edit') && (
-                                        <th className="border-top-0 text-end">Actions</th>
-                                        )}
+                                        {can('jobs', 'edit') && <th className="border-top-0 text-end">Actions</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {jobs.length > 0 ? jobs.map(job => (
+                                    {jobs.length > 0 ? jobs.map(job => {
+                                        const hiredCount = Array.isArray(job.assignedTo) ? job.assignedTo.length : (job.assignedTo ? 1 : 0);
+                                        const totalSpots = job.positionsAvailable || 1;
+                                        
+                                        return (
                                         <tr key={job._id}>
                                             <td>
                                                 <div className="fw-bold">
-                                                    <Link 
-                                                        to={`/admin/jobs/${job._id}`} 
-                                                        className="text-primary text-decoration-none"
-                                                        style={{ cursor: 'pointer' }} // Force cursor
-                                                        onMouseEnter={(e) => e.target.style.textDecoration = 'underline'} // Hover effect
-                                                        onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
-                                                    >
-                                                    {job.projectName}
-                                                </Link>
+                                                    <Link to={`/admin/jobs/${job._id}`} className="text-primary text-decoration-none fw-bold">
+                                                        {job.projectName}
+                                                    </Link>
                                                 </div>
                                                 <small className="text-muted">Lang: {job.projectLanguage}</small>
                                             </td>
+                                            
                                             <td className="text-center">
-                                                {job.applicantCount > 0 ? (
-                                                    <Badge color="info" pill>
-                                                        <FaUsers className="me-1" /> {job.applicantCount}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-muted small">-</span>
-                                                )}
+                                                <Badge color={hiredCount >= totalSpots ? "success" : "info"} pill>
+                                                    <FaUsers className="me-1" /> {hiredCount} / {totalSpots} Filled
+                                                </Badge>
+                                                <div className="small text-muted mt-1">{job.applicantCount} applicants</div>
                                             </td>
+                                            
                                             <td><Badge color="light" className="text-dark border">{job.targetRole}</Badge></td>
                                             <td className="fw-bold">{job.rate} €</td>
                                             <td>
@@ -262,6 +241,7 @@ export default function JobList() {
                                                 </small>
                                             </td>
                                             <td><Badge color={getStatusBadge(job.status)}>{job.status}</Badge></td>
+                                            
                                             {can('jobs', 'edit') && (
                                             <td className="text-end">
                                                 <div className="d-flex justify-content-end gap-2">
@@ -270,22 +250,16 @@ export default function JobList() {
                                                             <FaEdit className="text-secondary" />
                                                         </Button>
                                                     </Link>
-                                                    <Button 
-                                                        color="light" 
-                                                        size="sm" 
-                                                        className="border text-danger" 
-                                                        title="Delete"
-                                                        onClick={() => handleDelete(job._id)}
-                                                    >
+                                                    <Button color="light" size="sm" className="border text-danger" title="Delete" onClick={() => handleDelete(job._id)}>
                                                         <FaTrash />
                                                     </Button>
                                                 </div>
                                             </td>
                                             )}
                                         </tr>
-                                    )) : (
+                                    )}) : (
                                         <tr>
-                                            <td colSpan="6" className="text-center p-5 text-muted">
+                                            <td colSpan="7" className="text-center p-5 text-muted">
                                                 <FaBriefcase className="mb-3 display-4 opacity-25" />
                                                 <p>No jobs found.</p>
                                             </td>
@@ -294,8 +268,6 @@ export default function JobList() {
                                 </tbody>
                             </Table>
                         </div>
-                        
-                       
                         {renderPagination()}
                     </>
                 )}

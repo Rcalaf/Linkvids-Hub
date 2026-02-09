@@ -82,7 +82,7 @@ const AdminNav = () => {
                 </NavLink>
             </NavItem>
             
-            {can('config', 'view') && (
+            {(can('config', 'view') || can('users', 'view')) && (
                 <Dropdown nav isOpen={configDropdownOpen} toggle={toggleConfig}>
                     <DropdownToggle nav caret className={isConfigActive ? 'active' : ''}>
                         <FaCog className="me-2" />Admin
@@ -90,9 +90,13 @@ const AdminNav = () => {
                     <DropdownMenu>
                         <DropdownItem header>Users</DropdownItem>
                         <DropdownItem tag={Link} to="/admin/users"><FaUserShield className="me-2" />Team</DropdownItem>
-                        <DropdownItem header>Schema Definitions</DropdownItem>
-                        <DropdownItem tag={Link} to="/admin/config/attributes">Attribute Library</DropdownItem>
-                        <DropdownItem tag={Link} to="/admin/config/user-types">User Type Schemas</DropdownItem>
+                        {can('config', 'view')  && (
+                        <>
+                            <DropdownItem header>Schema Definitions</DropdownItem>
+                            <DropdownItem tag={Link} to="/admin/config/attributes">Attribute Library</DropdownItem>
+                            <DropdownItem tag={Link} to="/admin/config/user-types">User Type Schemas</DropdownItem>
+                        </>
+                        )}
                     </DropdownMenu>
                 </Dropdown>
             )}
@@ -149,10 +153,11 @@ const AdminNav = () => {
                             Manage Jobs
                         </DropdownItem>
                         {/* Optional: Quick link to create job */}
+                        {can('jobs', 'edit') && (
                         <DropdownItem tag={Link} to="/admin/jobs/create">
                             + Create New Job
                         </DropdownItem>
-                        
+                        )}
                         <DropdownItem divider />
                         
                         <DropdownItem header>Candidates</DropdownItem>

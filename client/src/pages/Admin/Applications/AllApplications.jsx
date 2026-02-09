@@ -78,35 +78,76 @@ export default function AllApplications() {
         setFilteredApps(result);
     };
 
-    // --- ACTION HANDLERS (Same as before) ---
+    // --- ACTION HANDLERS ---
+
     const handleAssign = async (app) => {
-        if (!window.confirm(`Assign "${app.jobTitle}" to ${app.candidateName}?`)) return;
+        if (!window.confirm(`Hire ${app.candidateName} for "${app.jobTitle}"?`)) return;
         try {
-            await assignJob(app.jobId, app.candidateId);
+            // 1. Call API
+            const response = await assignJob(app.jobId, app.candidateId);
+            const isNowFull = response.isFull;
+
+            // 2. Update Local State
             setApplications(prev => prev.map(item => {
+                // Update target user
+                if (item.applicationId === app.applicationId) {
+                    return { 
+                        ...item, 
+                        status: 'accepted',
+                        // If backend says job is full, we update local status
+                        jobStatus: isNowFull ? 'Assigned' : item.jobStatus,
+                        // Increment hired count locally for immediate feedback
+                        jobHiredCount: (item.jobHiredCount || 0) + 1
+                    };
+                }
+                
+                // If the job is now FULL, update other applicants for this job to reflect "Assigned" status
                 if (item.jobId === app.jobId) {
-                    if (item.candidateId === app.candidateId) {
-                        return { ...item, status: 'accepted', jobStatus: 'Assigned' };
-                    } else {
-                        return { ...item, status: 'rejected', jobStatus: 'Assigned' };
-                    }
+                    return {
+                         ...item, 
+                         jobStatus: isNowFull ? 'Assigned' : item.jobStatus,
+                         // Sync the counter for other rows of the same job
+                         jobHiredCount: (item.jobHiredCount || 0) + 1
+                    };
                 }
                 return item;
             }));
-            toast.success(`Job assigned to ${app.candidateName}`);
+            
+            toast.success(`Hired ${app.candidateName}!`);
         } catch (error) {
-            toast.error("Failed to assign job");
+            toast.error(error.response?.data?.message || "Failed to assign job");
         }
     };
 
     const handleUnassign = async (app) => {
-        if (!window.confirm(`Unassign this job? It will re-open.`)) return;
+        if (!window.confirm(`Unassign ${app.candidateName}? This slot will re-open.`)) return;
         try {
-            await unassignJob(app.jobId);
-            setApplications(prev => prev.map(item => 
-                item.jobId === app.jobId ? { ...item, status: 'pending', jobStatus: 'Open' } : item
-            ));
-            toast.info("Job unassigned and re-opened.");
+            // 1. Call API
+            await unassignJob(app.jobId, app.candidateId);
+            
+            // 2. Update Local State
+            setApplications(prev => prev.map(item => {
+                // Update target user
+                if (item.applicationId === app.applicationId) {
+                    return { 
+                        ...item, 
+                        status: 'pending',
+                        jobStatus: 'Open', // Job definitely opens up
+                        jobHiredCount: Math.max(0, (item.jobHiredCount || 1) - 1)
+                    };
+                }
+                // Update sibling rows for same job
+                if (item.jobId === app.jobId) {
+                    return { 
+                        ...item, 
+                        jobStatus: 'Open',
+                        jobHiredCount: Math.max(0, (item.jobHiredCount || 1) - 1)
+                    };
+                }
+                return item;
+            }));
+            
+            toast.info("User unassigned. Job slot re-opened.");
         } catch (error) {
             toast.error("Failed to unassign");
         }
@@ -162,7 +203,9 @@ export default function AllApplications() {
 
     const getStatusBadge = (status) => {
         switch (status) {
-            case 'accepted': return <Badge color="success" className="p-2 px-3">Hired</Badge>;
+            case 'accepted': 
+            case 'assigned': // Legacy support
+                return <Badge color="success" className="p-2 px-3">Hired</Badge>;
             case 'shortlisted': return <Badge color="warning" className="text-dark p-2 px-3">Shortlisted</Badge>;
             case 'rejected': return <Badge color="secondary" className="p-2 px-3">Rejected</Badge>;
             case 'pending': return <Badge color="info" outline className="p-2 px-3">Pending</Badge>;
@@ -177,7 +220,7 @@ export default function AllApplications() {
             <h2 className="mb-4">Global Applications Manager</h2>
             
             <Widget>
-                {/* --- UPDATED TOOLBAR --- */}
+                {/* --- TOOLBAR --- */}
                 <Row className="mb-4 g-3 align-items-center justify-content-between">
                     
                     {/* Search Bar (Left) */}
@@ -227,7 +270,7 @@ export default function AllApplications() {
                             <thead className="bg-light text-muted small text-uppercase">
                                 <tr>
                                     <th className="border-0 ps-3">Candidate</th>
-                                    <th className="border-0">Applied Job</th>
+                                    <th className="border-0">Applied Job / Progress</th>
                                     <th className="border-0">Date</th>
                                     <th className="border-0">Status</th>
                                     <th className="border-0 text-end pe-3">Actions</th>
@@ -235,10 +278,16 @@ export default function AllApplications() {
                             </thead>
                             <tbody>
                                 {filteredApps.map((app) => {
+                                    // 1. Calculate Status Flags
                                     const isJobClosed = app.jobStatus === 'Assigned' || app.jobStatus === 'Completed';
-                                    const isWinner = app.status === 'accepted';
+                                    const isWinner = app.status === 'accepted' || app.status === 'assigned';
                                     const isRejected = app.status === 'rejected';
                                     const isShortlisted = app.status === 'shortlisted';
+
+                                    // 2. Calculate Counts (Safe Fallbacks)
+                                    const hiredCount = app.jobHiredCount || 0;
+                                    const totalPositions = app.jobTotalPositions || 1;
+                                    const isFull = hiredCount >= totalPositions;
 
                                     return (
                                     <tr key={app.applicationId} className={isWinner ? 'table-success' : ''}>
@@ -262,13 +311,19 @@ export default function AllApplications() {
                                             </div>
                                         </td>
 
-                                        {/* Job Info */}
+                                        {/* Job Info & Progress */}
                                         <td>
                                             <Link to={`/admin/jobs/${app.jobId}`} className="text-decoration-none fw-semibold">
                                                 {app.jobTitle}
                                             </Link>
-                                            <div className="small text-muted mt-1">
-                                                Job: <span className={app.jobStatus === 'Assigned' ? 'text-success fw-bold' : ''}>{app.jobStatus}</span>
+                                            <div className="d-flex align-items-center gap-2 mt-1">
+                                                <Badge color={app.jobStatus === 'Assigned' ? 'dark' : 'light'} className="text-dark border border-secondary">
+                                                    {app.jobStatus}
+                                                </Badge>
+                                                {/* 🚨 Positions Filled Badge */}
+                                                <Badge color={isFull ? "success" : "info"} pill className="fw-normal">
+                                                    {hiredCount} / {totalPositions} Filled
+                                                </Badge>
                                             </div>
                                         </td>
 
@@ -288,13 +343,16 @@ export default function AllApplications() {
                                             {canEdit ? (
                                                 <div className="d-flex justify-content-end gap-2">
                                                     {isWinner ? (
-                                                        <Button color="danger" size="sm" outline onClick={() => handleUnassign(app)} title="Unassign">
+                                                        <Button color="danger" size="sm" outline onClick={() => handleUnassign(app)} title="Unassign User">
                                                             <FaUndo />
                                                         </Button>
                                                     ) : isRejected ? (
-                                                        <Button color="secondary" size="sm" outline onClick={() => handleUnreject(app)} title="Restore">
-                                                            <FaUndo />
-                                                        </Button>
+                                                        <div className="d-flex gap-2">
+                                                            <span className="text-muted small align-self-center">Rejected</span>
+                                                            <Button color="secondary" size="sm" outline onClick={() => handleUnreject(app)} title="Restore">
+                                                                <FaUndo />
+                                                            </Button>
+                                                        </div>
                                                     ) : (
                                                         <>
                                                             {isShortlisted ? (
@@ -306,9 +364,17 @@ export default function AllApplications() {
                                                                     <FaRegStar className="text-muted"/>
                                                                 </Button>
                                                             )}
-                                                            <Button color="success" size="sm" outline onClick={() => handleAssign(app)} disabled={isJobClosed} title="Assign Job">
+                                                            
+                                                            <Button 
+                                                                color="success" size="sm" outline 
+                                                                onClick={() => handleAssign(app)} 
+                                                                // Disable Assign if Job is FULL (Assigned)
+                                                                disabled={isFull} 
+                                                                title={isFull ? "Job Full" : "Hire Candidate"}
+                                                            >
                                                                 <FaCheck />
                                                             </Button>
+                                                            
                                                             <Button color="danger" size="sm" outline onClick={() => handleReject(app)} disabled={isJobClosed} title="Reject">
                                                                 <FaTimes />
                                                             </Button>

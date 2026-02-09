@@ -1,16 +1,18 @@
-// client/src/pages/Admin/ManageAttributes.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Table, Button, Form, FormGroup, Label, Input } from 'reactstrap';
+import { Container, Row, Col, Table, Button, Form, FormGroup, Label, Input, Alert } from 'reactstrap';
 import { toast } from 'react-toastify';
 import Widget from '../../components/Widget/Widget'; 
+import { FaEdit, FaTrash, FaPlus, FaCheck, FaTimes } from 'react-icons/fa';
 
 import { 
     getAllAttributes, 
     createAttribute, 
     updateAttribute, 
     deleteAttribute, 
-    // processAttributeFormData // 🚨 We will handle processing locally to support JSON 🚨
 } from '../../services/attributeService'; 
+
+// 🚨 1. Import Permissions Hook
+import { usePermissions } from '../../hooks/usePermissions';
 
 const FIELD_TYPES = ['text', 'number', 'date', 'boolean', 'array', 'select', 'url', 'mixed', 'image_array'];
 
@@ -24,9 +26,12 @@ const initialFormState = {
 };
 
 export default function ManageAttributes() {
+    // 🚨 2. Initialize Permissions
+    const { can } = usePermissions();
+    const canEdit = can('config', 'edit'); // Check if user has Edit access to Config
+
     const [attributes, setAttributes] = useState([]);
     const [formData, setFormData] = useState(initialFormState);
-    // Track if we are in "JSON Mode" (for complex object options)
     const [isJsonMode, setIsJsonMode] = useState(false);
 
     useEffect(() => {
@@ -54,19 +59,18 @@ export default function ManageAttributes() {
         }
     };
 
-    // 🚨 FIX: Handle Object structures in Edit Click 🚨
     const handleEditClick = (attribute) => {
+        // 🚨 Double check permission before allowing edit action
+        if (!canEdit) return; 
+
         let formattedOptions = '';
         let complexDataFound = false;
 
         if (Array.isArray(attribute.defaultOptions) && attribute.defaultOptions.length > 0) {
-            // Check if the first item is an object (Complex Structure)
             if (typeof attribute.defaultOptions[0] === 'object') {
-                // Convert to pretty JSON string for editing
                 formattedOptions = JSON.stringify(attribute.defaultOptions, null, 4);
                 complexDataFound = true;
             } else {
-                // Simple string array -> Comma separated
                 formattedOptions = attribute.defaultOptions.join(', ');
                 complexDataFound = false;
             }
@@ -89,20 +93,22 @@ export default function ManageAttributes() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // 🚨 FIX: Custom Payload Processing to handle JSON 🚨
+        // 🚨 Security Check
+        if (!canEdit) {
+            return toast.error("You do not have permission to modify attributes.");
+        }
+
         let processedOptions = [];
         
         if (formData.defaultOptions) {
             if (isJsonMode) {
                 try {
-                    // Try to parse the JSON string back into an object array
                     processedOptions = JSON.parse(formData.defaultOptions);
                     if (!Array.isArray(processedOptions)) throw new Error("Must be an array");
                 } catch (err) {
                     return toast.error("Invalid JSON format in Options. Please check syntax.");
                 }
             } else {
-                // Standard Comma Separated processing
                 processedOptions = formData.defaultOptions.split(',').map(s => s.trim()).filter(s => s);
             }
         }
@@ -112,7 +118,6 @@ export default function ManageAttributes() {
             defaultOptions: processedOptions
         };
 
-        // Validation for image_array
         if (payload.fieldType === 'image_array' && payload.defaultOptions.length > 0) {
              return toast.error("Image Array types cannot have default options.");
         }
@@ -127,7 +132,7 @@ export default function ManageAttributes() {
             }
             
             setFormData(initialFormState);
-            setIsJsonMode(false); // Reset mode
+            setIsJsonMode(false); 
             await fetchAttributes(); 
         } catch (error) {
             const msg = error.response?.data?.message || "An unexpected error occurred.";
@@ -137,6 +142,9 @@ export default function ManageAttributes() {
     };
 
     const handleDelete = async (slug, name) => {
+        // 🚨 Security Check
+        if (!canEdit) return;
+
         if (!window.confirm(`Are you sure you want to delete the attribute: ${name}?`)) return;
 
         try {
@@ -154,88 +162,97 @@ export default function ManageAttributes() {
 
     return (
         <Container fluid>
-            <Row className="mb-4">
-                <Col md={12}>
-                    <Widget id="form-anchor" title={formData.isEditing ? `Edit Attribute: ${formData.name}` : "Create New Attribute"}>
-                        <Form onSubmit={handleSubmit}>
-                            <Row>
-                                <Col md={4}>
-                                    <FormGroup>
-                                        <Label for="slug">Slug (Unique Key)</Label>
-                                        <Input
-                                            type="text" name="slug" id="slug"
-                                            value={formData.slug} onChange={handleChange}
-                                            disabled={formData.isEditing}
-                                            placeholder="e.g., profile_photos" required
-                                        />
-                                    </FormGroup>
-                                </Col>
-                                <Col md={4}>
-                                    <FormGroup>
-                                        <Label for="name">Display Name</Label>
-                                        <Input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required />
-                                    </FormGroup>
-                                </Col>
-                                <Col md={4}>
-                                    <FormGroup>
-                                        <Label for="fieldType">Field Type</Label>
-                                        <Input type="select" name="fieldType" id="fieldType" value={formData.fieldType} onChange={handleChange} required>
-                                            {FIELD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                                        </Input>
-                                    </FormGroup>
-                                </Col>
-                            </Row>
-                            <FormGroup>
-                                <Label for="description">Description (Hint/Placeholder)</Label>
-                                <Input type="textarea" name="description" id="description" value={formData.description} onChange={handleChange} />
-                            </FormGroup>
-                            
-                            {isOptionsField && (
+            
+            {/* 🚨 3. Conditional Rendering: Only show Form if user has Edit Permissions */}
+            {canEdit ? (
+                <Row className="mb-4">
+                    <Col md={12}>
+                        <Widget id="form-anchor" title={formData.isEditing ? `Edit Attribute: ${formData.name}` : "Create New Attribute"}>
+                            <Form onSubmit={handleSubmit}>
+                                <Row>
+                                    <Col md={4}>
+                                        <FormGroup>
+                                            <Label for="slug">Slug (Unique Key)</Label>
+                                            <Input
+                                                type="text" name="slug" id="slug"
+                                                value={formData.slug} onChange={handleChange}
+                                                disabled={formData.isEditing}
+                                                placeholder="e.g., profile_photos" required
+                                            />
+                                        </FormGroup>
+                                    </Col>
+                                    <Col md={4}>
+                                        <FormGroup>
+                                            <Label for="name">Display Name</Label>
+                                            <Input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required />
+                                        </FormGroup>
+                                    </Col>
+                                    <Col md={4}>
+                                        <FormGroup>
+                                            <Label for="fieldType">Field Type</Label>
+                                            <Input type="select" name="fieldType" id="fieldType" value={formData.fieldType} onChange={handleChange} required>
+                                                {FIELD_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                                            </Input>
+                                        </FormGroup>
+                                    </Col>
+                                </Row>
                                 <FormGroup>
-                                    <div className="d-flex justify-content-between">
-                                        <Label for="defaultOptions">
-                                            Options {isJsonMode ? '(JSON Format)' : '(Comma Separated)'}
-                                        </Label>
-                                        {/* Toggle for advanced users to switch modes manually if creating new complex fields */}
-                                        <Button size="sm" color="link" onClick={() => setIsJsonMode(!isJsonMode)}>
-                                            Switch to {isJsonMode ? 'Simple Text' : 'JSON (Advanced)'}
-                                        </Button>
-                                    </div>
-                                    
-                                    {/* 🚨 FIX: Use Textarea for JSON editing to allow space 🚨 */}
-                                    <Input 
-                                        type="textarea" 
-                                        rows={isJsonMode ? 10 : 2}
-                                        name="defaultOptions" 
-                                        id="defaultOptions" 
-                                        value={formData.defaultOptions} 
-                                        onChange={handleChange} 
-                                        placeholder={isJsonMode 
-                                            ? '[ { "value": "A", "label": "Option A", "group": "G1" } ]' 
-                                            : 'Option A, Option B, Option C'
-                                        }
-                                        style={{ fontFamily: isJsonMode ? 'monospace' : 'inherit', fontSize: isJsonMode ? '0.9em' : 'inherit' }}
-                                    />
-                                    {isJsonMode && <small className="text-muted">Edit the JSON structure carefully to preserve Value, Label, and Description.</small>}
+                                    <Label for="description">Description (Hint/Placeholder)</Label>
+                                    <Input type="textarea" name="description" id="description" value={formData.description} onChange={handleChange} />
                                 </FormGroup>
-                            )}
-
-                            <div className="d-flex justify-content-end">
-                                {formData.isEditing && (
-                                    <Button color="secondary" onClick={() => { setFormData(initialFormState); setIsJsonMode(false); }} className="me-2">
-                                        Cancel Edit
-                                    </Button>
+                                
+                                {isOptionsField && (
+                                    <FormGroup>
+                                        <div className="d-flex justify-content-between">
+                                            <Label for="defaultOptions">
+                                                Options {isJsonMode ? '(JSON Format)' : '(Comma Separated)'}
+                                            </Label>
+                                            <Button size="sm" color="link" onClick={() => setIsJsonMode(!isJsonMode)}>
+                                                Switch to {isJsonMode ? 'Simple Text' : 'JSON (Advanced)'}
+                                            </Button>
+                                        </div>
+                                        
+                                        <Input 
+                                            type="textarea" 
+                                            rows={isJsonMode ? 10 : 2}
+                                            name="defaultOptions" 
+                                            id="defaultOptions" 
+                                            value={formData.defaultOptions} 
+                                            onChange={handleChange} 
+                                            placeholder={isJsonMode 
+                                                ? '[ { "value": "A", "label": "Option A", "group": "G1" } ]' 
+                                                : 'Option A, Option B, Option C'
+                                            }
+                                            style={{ fontFamily: isJsonMode ? 'monospace' : 'inherit', fontSize: isJsonMode ? '0.9em' : 'inherit' }}
+                                        />
+                                        {isJsonMode && <small className="text-muted">Edit the JSON structure carefully to preserve Value, Label, and Description.</small>}
+                                    </FormGroup>
                                 )}
-                                <Button color="primary" type="submit">
-                                    {formData.isEditing ? 'Save Changes' : 'Create Attribute'}
-                                </Button>
-                            </div>
-                        </Form>
-                    </Widget>
-                </Col>
-            </Row>
 
-            <Row className="mt-5">
+                                <div className="d-flex justify-content-end">
+                                    {formData.isEditing && (
+                                        <Button color="secondary" onClick={() => { setFormData(initialFormState); setIsJsonMode(false); }} className="me-2">
+                                            Cancel Edit
+                                        </Button>
+                                    )}
+                                    <Button color="primary" type="submit">
+                                        {formData.isEditing ? 'Save Changes' : 'Create Attribute'}
+                                    </Button>
+                                </div>
+                            </Form>
+                        </Widget>
+                    </Col>
+                </Row>
+            ) : (
+                // Optional: Show a message that they are in View Only mode
+                <Row className="mb-4">
+                    <Col>
+                        <Alert color="info">You are viewing Attributes in Read-Only mode.</Alert>
+                    </Col>
+                </Row>
+            )}
+
+            <Row className={canEdit ? "mt-5" : ""}>
                 <Col md={12}>
                     <Widget title={`Existing Global Attributes (${attributes.length})`}>
                         <Table striped responsive>
@@ -245,7 +262,8 @@ export default function ManageAttributes() {
                                     <th>Display Name</th>
                                     <th>Type</th>
                                     <th>Options</th>
-                                    <th>Actions</th>
+                                    {/* 🚨 4. Only show Actions header if allowed */}
+                                    {canEdit && <th>Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -260,10 +278,18 @@ export default function ManageAttributes() {
                                                 : 'N/A'
                                             }
                                         </td>
-                                        <td>
-                                            <Button size="sm" color="info" className="me-2" onClick={() => handleEditClick(attr)}>Edit</Button>
-                                            <Button size="sm" color="danger" onClick={() => handleDelete(attr.slug, attr.name)}>Delete</Button>
-                                        </td>
+                                        {/* 🚨 5. Only show Actions buttons if allowed */}
+                                        {canEdit && (
+                                              <td className="text-end">
+                                                <Button size="sm" color="light" className="me-2 border" onClick={() => handleEditClick(attr)} title="Edit">
+                                                    <FaEdit className="text-secondary"/>
+                                                </Button>
+                                                <Button size="sm" color="light" className="border" onClick={() => handleDelete(attr.slug, attr.name)} title="Delete">
+                                                    <FaTrash className="text-danger"/>
+                                                </Button>
+                                            </td>
+                                            
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

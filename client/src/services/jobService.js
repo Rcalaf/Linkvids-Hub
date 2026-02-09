@@ -52,8 +52,8 @@ export const rejectApplicant = async (jobId, userId) => {
     return response.data;
 };
 
-export const unassignJob = async (jobId) => {
-    const response = await api.put(`/jobs/${jobId}/unassign`);
+export const unassignJob = async (jobId,userId) => {
+    const response = await api.put(`/jobs/${jobId}/unassign`, { userId });
     return response.data;
 };
 

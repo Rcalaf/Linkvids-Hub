@@ -52,11 +52,10 @@ const jobSchema = new Schema({
         ref: 'User', // References BaseUser (could be Admin or Agency)
         required: true
     },
-    assignedTo: {
+    assignedTo: [{
         type: Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    },
+        ref: 'User'
+    }],
     // applicants: [{
     //     type: Schema.Types.ObjectId,
     //     ref: 'User'
@@ -65,6 +64,11 @@ const jobSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User'
     }],
+    positionsAvailable: {
+        type: Number,
+        default: 1,
+        min: 1
+    },
     applicants: [{
         user: {
             type: Schema.Types.ObjectId,
@@ -77,7 +81,7 @@ const jobSchema = new Schema({
         },
         status: {
             type: String,
-            enum: ['pending', 'viewed', 'shortlisted', 'rejected', 'assigned'],
+            enum: ['pending', 'viewed', 'shortlisted', 'rejected', 'accepted'],
             default: 'pending'
         },
         coverNote: { 

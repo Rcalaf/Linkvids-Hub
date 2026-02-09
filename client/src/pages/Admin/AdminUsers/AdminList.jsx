@@ -99,23 +99,23 @@ export default function AdminList() {
                                 <td>{renderPerms(admin.permissions)}</td>
                                 <td className="text-center">
                                     <FormGroup switch className="d-flex justify-content-center">
-                                        {can('config', 'edit') && (
+                                       
                                         <Input 
                                             type="switch" 
                                             checked={admin.isActive}
-                                            disabled={admin._id === currentUserId}
+                                            disabled={isMe || !can('users', 'edit')}
                                             onChange={() => handleToggleStatus(admin._id)}
                                         />
-                                        )}
+                                    
                                     </FormGroup>
                                 </td>
                                 <td className="text-end">
-                                    {can('config', 'edit') && (
+                                    {(can('users', 'edit') || isMe)  && (
                                         <Link to={`/admin/users/edit/${admin._id}`}>
                                             <Button color="light" size="sm" className="me-2 border"><FaEdit /></Button>
                                         </Link>
                                     )}
-                                    {!isMe && can('config', 'edit') && (
+                                    {!isMe && can('users', 'edit') && (
                                         <Button color="light" size="sm" className="text-danger border" onClick={() => handleDelete(admin._id)}>
                                             <FaTrash />
                                         </Button>

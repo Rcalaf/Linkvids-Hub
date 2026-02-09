@@ -170,7 +170,7 @@ export default function EditUserPage() {
                                 <i className="fa fa-info-circle me-1"></i>
                                 <strong>Note:</strong> Changes made here are saved when you click the main <strong>"Save Changes"</strong> button on the left.
                             </Alert> */}
-                        <Widget title="Internal Evaluation">
+                        <Widget title="Internal Evaluatio">
                             <div className="mb-3 text-center p-3 bg-white rounded border">
                                 <label className="small text-muted mb-1 d-block fw-bold">PERFORMANCE RATING</label>
                                 <div className="d-flex justify-content-center">

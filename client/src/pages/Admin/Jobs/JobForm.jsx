@@ -1,20 +1,19 @@
 // client/src/pages/Admin/Jobs/JobForm.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Container, Row, Col, Button, FormGroup, Label, InputGroup, InputGroupText, Input as ReactstrapInput } from 'reactstrap';
+import { 
+    Container, Row, Col, Button, FormGroup, Label, InputGroup, InputGroupText 
+} from 'reactstrap';
 import { Formik, Form, Field, ErrorMessage, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'react-toastify';
-import { FaArrowLeft, FaSave, FaTrash, FaPlus,FaEuroSign } from 'react-icons/fa';
+import { FaEuroSign, FaTrash, FaPlus } from 'react-icons/fa';
 
 import Widget from '../../../components/Widget/Widget';
 import Title from '../../../components/Title';
 import { createJob, getJobById, updateJob } from '../../../services/jobService';
 import { getAllUserTypes } from '../../../services/userTypeService';
 import { getStaticLists } from '../../../services/staticDataService';
-
-// Hardcoded for now, or fetch from staticDataService
-
 
 export default function JobForm() {
     const { jobId } = useParams(); // If present, we are editing
@@ -29,13 +28,11 @@ export default function JobForm() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // 1. Load User Types for the dropdown
+                // 1. Load User Types & Static Lists
                 const [types, staticLists] = await Promise.all([
                     getAllUserTypes(),
                     getStaticLists()
                 ]);
-
-                console.log(staticLists)
 
                 setUserTypes(types);
                 setLanguages(staticLists.languages || []);
@@ -43,6 +40,7 @@ export default function JobForm() {
                 if (isEditing) {
                     // 2. Load existing job data
                     const job = await getJobById(jobId);
+                    
                     // Format dates for input type="date" (YYYY-MM-DD)
                     const formatDate = (d) => d ? new Date(d).toISOString().split('T')[0] : '';
                     
@@ -50,10 +48,12 @@ export default function JobForm() {
                         ...job,
                         projectStartDate: formatDate(job.projectStartDate),
                         projectEndDate: formatDate(job.projectEndDate),
-                        shootingDates: job.shootingDates.map(formatDate) // Ensure array dates are formatted
+                        shootingDates: job.shootingDates ? job.shootingDates.map(formatDate) : [''],
+                        // 🚨 Ensure positionsAvailable loads correctly or defaults to 1
+                        positionsAvailable: job.positionsAvailable || 1 
                     });
                 } else {
-                    // Default Values for Create
+                    // 3. Default Values for Create
                     setInitialValues({
                         projectName: '',
                         projectDescription: '',
@@ -65,10 +65,13 @@ export default function JobForm() {
                         targetRole: types[0]?.slug || '',
                         rate: '',
                         imageRightsDuration: '',
+                        // 🚨 New Field Default
+                        positionsAvailable: 1, 
                         status: 'Draft'
                     });
                 }
             } catch (error) {
+                console.error(error);
                 toast.error("Error loading form data");
                 navigate('/admin/jobs');
             } finally {
@@ -78,6 +81,7 @@ export default function JobForm() {
         loadData();
     }, [jobId, isEditing, navigate]);
 
+    // 4. Update Validation Schema
     const validationSchema = Yup.object({
         projectName: Yup.string().required('Project name is required'),
         targetRole: Yup.string().required('Target role is required'),
@@ -93,6 +97,11 @@ export default function JobForm() {
                 Yup.ref('projectStartDate'),
                 "End date cannot be before start date"
             ),
+        // 🚨 Validate Positions
+        positionsAvailable: Yup.number()
+            .required('Required')
+            .min(1, 'At least 1 position required')
+            .integer('Must be a whole number'),
     });
 
     const handleSubmit = async (values, { setSubmitting }) => {
@@ -112,32 +121,25 @@ export default function JobForm() {
             }
             navigate('/admin/jobs');
         } catch (error) {
+            console.error(error);
             toast.error("Operation failed");
         } finally {
             setSubmitting(false);
         }
     };
 
-    if (isLoading) return <p>Loading...</p>;
+    if (isLoading) return <p className="p-4">Loading form...</p>;
 
     return (
         <Container fluid>
-
             <Title title={isEditing ? "Edit Job" : "Create New Job"} />
-            <div className="mb-4">
-                <Button tag={Link} to="/admin/jobs" color="secondary">
-                    ← Back
+            
+            {/* Top Navigation Bar */}
+            <div className="mb-4 d-flex justify-content-between align-items-center">
+                <Button tag={Link} to="/admin/jobs" color="secondary" outline>
+                    ← Back to Jobs
                 </Button>
             </div>
-
-            {/* <div className="d-flex justify-content-between align-items-center mb-4">
-                <div className="d-flex align-items-center gap-3">
-                    <Link to="/admin/jobs">
-                        <Button color="secondary" outline size="sm"><FaArrowLeft /> Back</Button>
-                    </Link>
-                    <Title title={isEditing ? "Edit Job" : "Create New Job"} />
-                </div>
-            </div> */}
 
             <Widget title="Job Details">
                 <Formik
@@ -149,7 +151,7 @@ export default function JobForm() {
                     {({ values, isSubmitting, errors, touched }) => (
                         <Form>
                             <Row>
-                                {/* Core Info */}
+                                {/* LEFT COLUMN: Core Info */}
                                 <Col md={8}>
                                     <FormGroup>
                                         <Label>Project Name</Label>
@@ -195,28 +197,45 @@ export default function JobForm() {
                                     </FormGroup>
                                 </Col>
 
-                                {/* Logistics Sidebar */}
+                                {/* RIGHT COLUMN: Logistics Sidebar */}
                                 <Col md={4}>
                                     <div className="p-3 bg-light rounded border mb-3">
-                                        <h6 className="text-primary">Financials & Status</h6>
+                                        <h6 className="text-primary fw-bold mb-3">Financials & Status</h6>
+                                        
                                         <FormGroup>
+                                            <Label>Budget / Rate</Label>
                                             <InputGroup className={errors.rate && touched.rate ? 'is-invalid' : ''}>
                                                 <InputGroupText><FaEuroSign /></InputGroupText>
                                                 <Field type="number" name="rate" className={`form-control ${errors.rate && touched.rate ? 'is-invalid' : ''}`} />
                                             </InputGroup>
                                             <ErrorMessage name="rate" component="div" className="text-danger small mt-1" />
                                         </FormGroup>
+
+                                        {/* 🚨 NEW FIELD: POSITIONS AVAILABLE */}
+                                        <FormGroup>
+                                            <Label className="fw-bold">Positions Available</Label>
+                                            <Field 
+                                                type="number" 
+                                                name="positionsAvailable" 
+                                                className={`form-control ${errors.positionsAvailable && touched.positionsAvailable ? 'is-invalid' : ''}`} 
+                                                min="1"
+                                            />
+                                            <div className="form-text small text-muted">How many creators to hire?</div>
+                                            <ErrorMessage name="positionsAvailable" component="div" className="invalid-feedback" />
+                                        </FormGroup>
+
                                         <FormGroup>
                                             <Label>Rights Duration</Label>
-                                            <Field name="imageRightsDuration" className={`form-control ${errors.imageRightsDuration && touched.imageRightsDuration ? 'is-invalid' : ''}`} placeholder="e.g. 1 Year, Perpetuity" />
+                                            <Field name="imageRightsDuration" className={`form-control ${errors.imageRightsDuration && touched.imageRightsDuration ? 'is-invalid' : ''}`} placeholder="e.g. Perpetuity" />
                                             <ErrorMessage name="imageRightsDuration" component="div" className="invalid-feedback" />
                                         </FormGroup>
+
                                         <FormGroup>
                                             <Label>Status</Label>
                                             <Field as="select" name="status" className="form-control form-select">
                                                 <option value="Draft">Draft</option>
                                                 <option value="Open">Open</option>
-                                                <option value="Assigned">Assigned</option>
+                                                <option value="Assigned">Assigned (Full)</option>
                                                 <option value="Completed">Completed</option>
                                                 <option value="Cancelled">Cancelled</option>
                                             </Field>
@@ -224,7 +243,7 @@ export default function JobForm() {
                                     </div>
 
                                     <div className="p-3 bg-light rounded border">
-                                        <h6 className="text-primary">Dates</h6>
+                                        <h6 className="text-primary fw-bold mb-3">Timeline</h6>
                                         <Row>
                                             <Col md={6}>
                                                 <FormGroup>
@@ -260,20 +279,16 @@ export default function JobForm() {
                                 </Col>
                             </Row>
 
-                            {/* <div className="d-flex justify-content-end mt-4 pt-3 border-top">
-                                <Button type="submit" color="success" size="lg" disabled={isSubmitting}>
-                                    <FaSave className="me-2" /> {isEditing ? 'Update Job' : 'Create Job'}
-                                </Button>
-                            </div> */}
-                            <div className="d-flex justify-content-end gap-2 mt-4">
+                            {/* Actions Footer */}
+                            <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
                                 <Link to={`/admin/jobs`}>
-                                    <Button color="danger" outline >
-                                            Cancel
+                                    <Button color="danger" outline disabled={isSubmitting}>
+                                        Cancel
                                     </Button>
                                 </Link>
                     
                                 <Button color="success" type="submit" disabled={isSubmitting}>
-                                    {isSubmitting ? 'Saving...' : (isEditing ? 'Save Changes' : `Create Job`)}
+                                    {isSubmitting ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Job')}
                                 </Button>
                             </div>
                         </Form>

@@ -66,7 +66,7 @@ function App() {
           {/* Admin Protected Routes */}
           <Route path="admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} /> {/* /admin */}
-            <Route path="config" element={<RequirePermission module="config" level="edit" layout={<ConfigManager />}/>}>
+            <Route path="config" element={<RequirePermission module="config" level="view" layout={<ConfigManager />}/>}>
                 <Route index element={<ConfigHubCards />} /> 
                 <Route path="attributes" element={<ManageAttributes />} /> 
                 <Route path="user-types" element={<ManageUserTypes />} />
@@ -74,7 +74,7 @@ function App() {
               <Route path="users" element={<RequirePermission module="users" level="view" />}>
                 <Route index element={<AdminList />} /> 
              </Route>
-             <Route path="users" element={<RequirePermission module="users" level="edit" />}>
+             <Route path="users" element={<RequirePermission module="users" level="view" />}>
                 <Route path="create" element={<AdminForm />} />
                 <Route path="edit/:id" element={<AdminForm />} />
              </Route>

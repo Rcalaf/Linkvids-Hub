@@ -2,13 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Button, Badge, Card, CardBody, ListGroup, ListGroupItem, Alert } from 'reactstrap';
-import { FaArrowLeft, FaEdit, FaCalendarAlt, FaEuroSign, FaGlobe, FaBriefcase, FaTrash } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaBriefcase, FaEuroSign, FaGlobe, FaUsers } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
 import Title from '../../../components/Title';
 import Widget from '../../../components/Widget/Widget';
-import ApplicantManager from '../../../components/Admin/Applications/ApplicantManager'; 
-import { getJobById, deleteJob } from '../../../services/jobService';
+import ApplicantManager from '../../../components/Admin/Applications/ApplicantManager'; // Ensure correct path
+import { getJobById } from '../../../services/jobService';
 import { usePermissions } from '../../../hooks/usePermissions';
 
 export default function JobDetail() {
@@ -35,24 +35,16 @@ export default function JobDetail() {
         }
     };
 
-    // const handleDelete = async () => {
-    //     if (!window.confirm("Are you sure you want to delete this job? This cannot be undone.")) return;
-    //     try {
-    //         await deleteJob(jobId);
-    //         toast.success("Job deleted.");
-    //         navigate('/admin/jobs');
-    //     } catch (error) {
-    //         toast.error("Delete failed.");
-    //     }
-    // };
-
-    // Callback to refresh data after an assignment
     const handleAssignComplete = () => {
-        loadJob(); // Reloads to show "Assigned" status and disable other buttons
+        loadJob(); 
     };
 
     if (loading) return <p className="p-5 text-center">Loading job details...</p>;
     if (!job) return null;
+
+    // 🚨 Calculate hiring progress locally for display
+    const hiredCount = Array.isArray(job.assignedTo) ? job.assignedTo.length : (job.assignedTo ? 1 : 0);
+    const totalSpots = job.positionsAvailable || 1;
 
     return (
         <Container fluid>
@@ -78,9 +70,6 @@ export default function JobDetail() {
                             <FaEdit className="me-2" /> Edit Job
                         </Button>
                     </Link>
-                    {/* <Button color="danger" outline onClick={handleDelete}>
-                        <FaTrash />
-                    </Button> */}
                 </div>  
                 )}
             </div>
@@ -88,7 +77,6 @@ export default function JobDetail() {
             <Row>
                 {/* LEFT COLUMN: Job Overview */}
                 <Col md={8}>
-                    {/* 1. Job Details Widget */}
                     <Widget title="Job Overview">
                         <h6 className="fw-bold text-primary">Description</h6>
                         <p style={{ whiteSpace: 'pre-line' }} className="mb-4 text-secondary">
@@ -109,17 +97,18 @@ export default function JobDetail() {
                         </div>
                     </Widget>
 
-                {can('jobs', 'edit') && (
-                    <div className="mt-4">
-                        <ApplicantManager 
-                            jobId={jobId} 
-                            currentStatus={job.status}
-                            assignedToId={job.assignedTo}
-                            rejectedIds={job.rejectedApplicants || []}
-                            onAssignComplete={handleAssignComplete}
-                        />
-                    </div>
-                )}
+                    {can('jobs', 'edit') && (
+                        <div className="mt-4">
+                            {/* 🚨 Pass correct props for Multi-Hire logic */}
+                            <ApplicantManager 
+                                jobId={jobId} 
+                                currentStatus={job.status}
+                                assignedToId={job.assignedTo} // Now likely an array, but we handle it inside manager
+                                positionsAvailable={job.positionsAvailable || 1}
+                                onAssignComplete={handleAssignComplete}
+                            />
+                        </div>
+                    )}
                 </Col>
 
                 {/* RIGHT COLUMN: Metadata */}
@@ -139,6 +128,14 @@ export default function JobDetail() {
                                 <ListGroupItem className="px-0 d-flex justify-content-between">
                                     <span><FaEuroSign className="me-2 text-muted" /> Rate</span>
                                     <span className="fw-bold text-success fs-5">{job.rate}€</span>
+                                </ListGroupItem>
+                                
+                                {/* 🚨 NEW: Positions Indicator */}
+                                <ListGroupItem className="px-0 d-flex justify-content-between align-items-center">
+                                    <span><FaUsers className="me-2 text-muted" /> Positions</span>
+                                    <Badge color={hiredCount >= totalSpots ? "success" : "warning"} pill>
+                                        {hiredCount} / {totalSpots} Filled
+                                    </Badge>
                                 </ListGroupItem>
                             </ListGroup>
 
@@ -171,7 +168,6 @@ export default function JobDetail() {
                         </CardBody>
                     </Card>
 
-                    {/* Meta Info */}
                     <Alert color="light" className="border">
                         <small className="d-block text-muted">Created By: <strong>{job.createdBy?.name || 'Unknown'}</strong></small>
                         <small className="d-block text-muted">Created At: {new Date(job.createdAt).toLocaleDateString()}</small>

@@ -81,7 +81,7 @@ const getAdminById = async (req, res) => {
 // --- 4. UPDATE ADMIN ---
 const updateAdmin = async (req, res) => {
     const { id } = req.params;
-    const { name, email, permissions, isActive } = req.body;
+    const { name, email, permissions, isActive, password } = req.body;
 
     try {
         const admin = await BaseUser.findOne({ _id: id, userType: 'LinkVidsAdmin' });
@@ -92,6 +92,10 @@ const updateAdmin = async (req, res) => {
         
         if (permissions) admin.permissions = { ...admin.permissions, ...permissions };
         if (isActive !== undefined) admin.isActive = isActive;
+
+        if (password && password.trim().length > 0) {
+            admin.password = await bcrypt.hash(password, 10); 
+        }
 
         await admin.save();
         res.json({ message: 'Admin updated.', admin });

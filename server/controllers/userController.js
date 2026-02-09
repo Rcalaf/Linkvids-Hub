@@ -147,6 +147,15 @@ exports.getAllUsers = async (req, res) => {
     try {
         const { mongoQuery, limit, skip } = buildUserQuery(req.query);
 
+        if (!mongoQuery.userType) {
+            // Scenario A: User wants "All Users". We explicitly exclude Admins.
+            mongoQuery.userType = { $ne: 'LinkVidsAdmin' };
+        } else if (mongoQuery.userType === 'LinkVidsAdmin') {
+            // Scenario B: API explicitly requested Admins. We block this by forcing the exclusion.
+            // (This results in 0 matches, effectively hiding them).
+            mongoQuery.userType = { $ne: 'LinkVidsAdmin' };
+        }
+
         const totalCount = await BaseUser.countDocuments(mongoQuery);
 
         const users = await BaseUser.find(mongoQuery)
@@ -256,6 +265,7 @@ exports.updateExistingUser = async (req, res) => {
             console.log('we are updating password....')
             user.password = await bcrypt.hash(password, 10);
         }
+        
 
         // 3. Update Dynamic Attributes (The Fix)
         const updateDynamicAttributes = {};

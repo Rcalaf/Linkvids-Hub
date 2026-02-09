@@ -299,7 +299,6 @@ export default function CreatorDashboard() {
                                     </Badge>
                                 </ListGroupItem>
 
-                                {/* 2. 🚨 NEW: Jobs Assigned (Your Current Projects) */}
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
                                     <div>
                                         Jobs Assigned
