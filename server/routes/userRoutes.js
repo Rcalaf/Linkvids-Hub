@@ -18,7 +18,7 @@ router.route('/')
 router.get('/dashboard-stats', userController.getDashboardStats);
 
 router.route('/:userId')
-    .get(userController.getUserById)     // SHOW / EDIT FORM LOAD
+    .get(userController.getUserById)     
     .put(userController.updateExistingUser) // UPDATE
     .delete(userController.deleteUser);
     

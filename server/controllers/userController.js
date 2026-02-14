@@ -70,7 +70,7 @@ const buildUserQuery = (query) => {
         Object.assign(mongoQuery, dynamicQuery);
     }
 
-    console.log(mongoQuery)
+    //console.log(mongoQuery)
 
     return { mongoQuery, limit, skip };
 };
@@ -329,60 +329,178 @@ exports.getDashboardStats = async (req, res) => {
         const userId = req.user._id || req.user;
         const userObjectId = new mongoose.Types.ObjectId(userId);
 
-        const user = await BaseUser.findById(userId)
-            .select('profile_picture phone city country financial_profile groupSpecificAttributes')
-            .lean();
+        const [user, statsResult] = await Promise.all([
+            BaseUser.findById(userId)
+                .select('profile_picture phone city country financial_profile groupSpecificAttributes')
+                .lean(),
+            Job.aggregate([
+                {
+                    // 1. MATCH: Find jobs where user is an Applicant OR is Assigned
+                    $match: {
+                        $or: [
+                            { 'applicants.user': userObjectId },
+                            { 'assignedTo': userObjectId }
+                        ]
+                    }
+                },
+                {
+                    // 2. PROJECT: Extract necessary fields and the specific user's application
+                    $project: {
+                        status: 1, // Job Status
+                        rate: 1,
+                        assignedTo: { $ifNull: ["$assignedTo", []] }, // Ensure array exists
+                        myApplication: {
+                            $arrayElemAt: [
+                                {
+                                    $filter: {
+                                        input: "$applicants",
+                                        as: "app",
+                                        cond: { $eq: ["$$app.user", userObjectId] }
+                                    }
+                                },
+                                0
+                            ]
+                        }
+                    }
+                },
+                {
+                    // 3. GROUP: Calculate counts based on strict logic
+                    $group: {
+                        _id: null,
+
+                        // A. PENDING APPLICATIONS (Replaces "Active")
+                        // Logic: Job is OPEN + User Status is 'pending' or 'viewed'
+                        activeApplications: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $eq: ["$status", "Open"] },
+                                            { $in: ["$myApplication.status", ["pending", "viewed"]] }
+                                        ]
+                                    }, 1, 0
+                                ]
+                            }
+                        },
+
+                        // B. SHORTLISTED
+                        // Logic: Job is OPEN + User Status is 'shortlisted'
+                        shortlistedApplications: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $eq: ["$status", "Open"] },
+                                            { $eq: ["$myApplication.status", "shortlisted"] }
+                                        ]
+                                    }, 1, 0
+                                ]
+                            }
+                        },
+
+                        // C. REJECTED
+                        // Logic: User Status is 'rejected' (Any job status)
+                        rejectedApplications: {
+                            $sum: {
+                                $cond: [
+                                    { $eq: ["$myApplication.status", "rejected"] }, 
+                                    1, 0
+                                ]
+                            }
+                        },
+
+                        // D. ASSIGNED JOBS (Strictly NOT Completed)
+                        // Logic: Job Status is 'Assigned' (or 'In Progress') AND User is in assignedTo
+                       assignedJobs: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $eq: ["$status", "Open"] },
+                                            { $eq: ["$myApplication.status", "accepted"] }
+                                        ]
+                                        
+                                        // $and: [
+                                        //     // 1. Am I assigned?
+                                        //     { $in: [userObjectId, "$assignedTo"] },
+                                        //     // 2. Is the job still active? (NOT Completed, Cancelled, or Draft)
+                                        //     // This explicitly ALLOWS "Open" jobs
+                                        //     { $nin: ["$status", ["Completed", "Cancelled", "Draft"]] }
+                                        // ]
+                                    }, 1, 0
+                                ]
+                            }
+                        },
+
+                        // E. COMPLETED JOBS
+                        // Logic: Job Status is 'Completed' AND User is in assignedTo
+                        jobsCompleted: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $eq: ["$status", "Completed"] },
+                                            { $in: [userObjectId, "$assignedTo"] }
+                                        ]
+                                    }, 1, 0
+                                ]
+                            }
+                        },
+
+                        // F. EARNINGS (From Completed Jobs only)
+                        totalEarnings: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            { $eq: ["$status", "Completed"] },
+                                            { $in: [userObjectId, "$assignedTo"] }
+                                        ]
+                                    }, "$rate", 0
+                                ]
+                            }
+                        }
+                    }
+                }
+            ])
+        ]);
 
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // --- PROFILE SCORE ---
+        // --- PROFILE SCORE CALCULATION ---
+        const checks = [
+            { field: 'profile_picture', points: 20 },
+            { field: 'phone', points: 10 },
+            { field: 'city', points: 5 },
+            { field: 'country', points: 5 },
+            { field: 'financial_profile.iban', points: 30 },
+            { field: 'groupSpecificAttributes', points: 30, check: (u) => u.groupSpecificAttributes && Object.keys(u.groupSpecificAttributes).length > 0 }
+        ];
+
         let score = 0;
         const missingRequirements = [];
-        if (user.profile_picture) score += 20; else missingRequirements.push("Profile Picture");
-        if (user.phone) score += 10; else missingRequirements.push("Phone Number");
-        if (user.city && user.country) score += 10; else missingRequirements.push("Location (City/Country)");
-        if (user.financial_profile?.iban) score += 30; else missingRequirements.push("Financial Info (IBAN)");
-        if (user.groupSpecificAttributes && Object.keys(user.groupSpecificAttributes).length > 0) score += 30; else missingRequirements.push("Role Details (Profile)");
 
-        // --- JOB STATS ---
-        
-        // 1. Active Applications (Pending/Shortlisted in Open jobs)
-        const activeApplications = await Job.countDocuments({
-            status: 'Open',
-            applicants: {
-                $elemMatch: {
-                    user: userObjectId,
-                    status: { $in: ['pending', 'shortlisted'] } 
-                }
-            }
+        checks.forEach(({ field, points, check }) => {
+            const isValid = check ? check(user) : field.split('.').reduce((o, p) => (o ? o[p] : null), user);
+            if (isValid) score += points;
+            else missingRequirements.push(field);
         });
 
-        // 2. Rejected Applications
-        const rejectedApplications = await Job.countDocuments({
-            applicants: {
-                $elemMatch: { user: userObjectId, status: 'rejected' }
-            }
-        });
-
-        const assignedJobs = await Job.countDocuments({
-            assignedTo: userObjectId,
-            status: { $in: ['Assigned', 'In Progress'] } 
-        });
-
-        // 4. Completed Jobs
-        const completedStats = await Job.aggregate([
-            { $match: { status: 'Completed', assignedTo: userObjectId } },
-            { $group: { _id: null, count: { $sum: 1 }, totalEarnings: { $sum: "$rate" } } }
-        ]);
+        // Default stats if no jobs found
+        //console.log(statsResult)
+        const stats = statsResult[0] || {
+            activeApplications: 0, // This represents "Pending"
+            shortlistedApplications: 0,
+            rejectedApplications: 0,
+            assignedJobs: 0,
+            jobsCompleted: 0,
+            totalEarnings: 0
+        };
 
         res.json({
-            profileCompleteness: score,
-            missingRequirements, 
-            activeApplications,
-            rejectedApplications,
-            assignedJobs, 
-            jobsCompleted: completedStats[0]?.count || 0,
-            totalEarnings: completedStats[0]?.totalEarnings || 0
+            profileCompleteness: Math.min(score, 100),
+            missingRequirements,
+            ...stats
         });
 
     } catch (error) {
@@ -391,13 +509,16 @@ exports.getDashboardStats = async (req, res) => {
     }
 };
 
+// Helper for nested properties
+const getNestedValue = (obj, path) => {
+    return path.split('.').reduce((o, p) => (o ? o[p] : null), obj);
+};
+
 // @desc    Rate a user (Internal Admin Use)
 // @route   PUT /api/users/:id/rate
 exports.rateUser = async (req, res) => {
     try {
         const { rating, notes } = req.body;
-
-        console.log(notes)
         
         const user = await BaseUser.findById(req.params.userId);
         if (!user) return res.status(404).json({ message: 'User not found' });

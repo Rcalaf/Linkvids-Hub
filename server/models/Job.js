@@ -42,28 +42,25 @@ const jobSchema = new Schema({
         type: String, 
         required: true // e.g., "6 months", "2 years", "Perpetuity"
     },
-    status: {
-        type: String,
-        enum: ['Draft', 'Open', 'Assigned', 'Completed', 'Cancelled'],
-        default: 'Draft'
-    },
+   
     createdBy: {
         type: Schema.Types.ObjectId,
         ref: 'User', // References BaseUser (could be Admin or Agency)
         required: true
     },
+    status: {
+        type: String,
+        enum: ['Draft', 'Open', 'Assigned', 'Completed', 'Cancelled'],
+        default: 'Draft'
+    },
     assignedTo: [{
         type: Schema.Types.ObjectId,
         ref: 'User'
     }],
-    // applicants: [{
+    // rejectedApplicants: [{
     //     type: Schema.Types.ObjectId,
     //     ref: 'User'
     // }],
-    rejectedApplicants: [{
-        type: Schema.Types.ObjectId,
-        ref: 'User'
-    }],
     positionsAvailable: {
         type: Number,
         default: 1,

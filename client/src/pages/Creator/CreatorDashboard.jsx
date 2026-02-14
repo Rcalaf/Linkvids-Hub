@@ -8,7 +8,7 @@ import {
     FaBriefcase, FaUserCircle, FaArrowRight, FaCalendarAlt, 
     FaCheckCircle, FaExclamationCircle, FaNewspaper, FaExternalLinkAlt 
 } from 'react-icons/fa';
-// 🚨 Import Markdown Renderer
+
 import ReactMarkdown from 'react-markdown'; 
 
 // Components
@@ -31,6 +31,9 @@ export default function CreatorDashboard() {
     const [stats, setStats] = useState({
         activeApplications: 0,
         jobsCompleted: 0,
+        shortlistedApplications: 0,
+        rejectedApplications: 0,
+        assignedJobs: 0,
         totalEarnings: 0,
         profileCompleteness: 0,
         missingRequirements: [] 
@@ -122,7 +125,6 @@ export default function CreatorDashboard() {
                                                     </Badge>
                                                 </div>
                                                 
-                                                {/* 🚨 Use ReactMarkdown for Excerpt (Optional but cleaner) */}
                                                 <div className="text-muted mb-2 small" style={{ fontSize: '0.9rem' }}>
                                                     <ReactMarkdown 
                                                         components={{ p: ({node, ...props}) => <p style={{margin:0}} {...props}/> }}
@@ -285,11 +287,11 @@ export default function CreatorDashboard() {
                                 {/* 1. Active Applications */}
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
                                     <div>
-                                        Active Applications
+                                        Jobs Applied 
                                         <Link 
                                             to="/creator/jobs" 
                                             state={{ initialStatus: 'Applied' }}
-                                            className="ms-2 text-decoration-none small text-primary"
+                                            className="ms-2 text-decoration-none small"
                                         >
                                             <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
                                         </Link>
@@ -301,17 +303,40 @@ export default function CreatorDashboard() {
 
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
                                     <div>
-                                        Jobs Assigned
+                                        Jobs Shortlisted
                                         <Link 
                                             to="/creator/jobs" 
-                                            state={{ initialStatus: 'Assigned' }} // Filters list to assigned jobs
-                                            className="ms-2 text-decoration-none small text-primary"
+                                            state={{ initialStatus: 'Shortlisted' }}
+                                            className="ms-2 text-decoration-none small"
                                         >
                                             <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
                                         </Link>
                                     </div>
-                                    <Badge color="primary" pill>
+                                    <Badge color="warning" pill>
+                                        {stats.shortlistedApplications}
+                                    </Badge>
+                                </ListGroupItem>
+
+                                <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
+                                    <div>
+                                        Jobs Assigned
+                                        <Link 
+                                            to="/creator/jobs" 
+                                            state={{ initialStatus: 'Assigned' }} // Filters list to assigned jobs
+                                            className="ms-2 text-decoration-none small"
+                                        >
+                                            <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
+                                        </Link>
+                                    </div>
+                                    <Badge color="success" pill>
                                         {stats.assignedJobs || 0}
+                                    </Badge>
+                                </ListGroupItem>
+
+                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
+                                    Rejected Applications
+                                    <Badge color="danger" pill>
+                                        {stats.rejectedApplications || 0}
                                     </Badge>
                                 </ListGroupItem>
 
@@ -321,7 +346,7 @@ export default function CreatorDashboard() {
                                         <Link 
                                             to="/creator/jobs" 
                                             state={{ initialStatus: 'Completed' }}
-                                            className="ms-2 text-decoration-none small text-success"
+                                            className="ms-2 text-decoration-none small"
                                         >
                                             <small>View</small> <FaExternalLinkAlt size={10} style={{ marginBottom: '2px' }} />
                                         </Link>
@@ -330,17 +355,6 @@ export default function CreatorDashboard() {
                                         {stats.jobsCompleted}
                                     </Badge>
                                 </ListGroupItem>
-
-                                {/* 3. Rejected Applications */}
-                                <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
-                                    Rejected Applications
-                                    <Badge color="danger" pill>
-                                        {stats.rejectedApplications || 0}
-                                    </Badge>
-                                </ListGroupItem>
-
-                                {/* 4. Jobs Completed */}
-                                
 
                                 {/* 5. Earnings */}
                                 <ListGroupItem className="d-flex justify-content-between align-items-center px-0">
@@ -362,7 +376,7 @@ export default function CreatorDashboard() {
                     {selectedNews?.title}
                 </ModalHeader>
                 <ModalBody className="p-4" style={{ lineHeight: '1.7', fontSize: '1rem' }}>
-                    {/* 🚨 Render Markdown Content */}
+             
                     <ReactMarkdown 
                         components={{
                             a: ({node, ...props}) => <a style={{color: '#0d6efd', fontWeight: 'bold'}} target="_blank" rel="noopener noreferrer" {...props} />,

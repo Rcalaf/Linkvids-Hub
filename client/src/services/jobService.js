@@ -72,9 +72,32 @@ export const undoShortlistApplicant = async (jobId, userId) => {
     return response.data;
 };
 
-export const getAllApplications = async () => {
-    const response = await api.get('/applications');
-    return response.data;
+export const getAllApplications = async (page = 1, limit = 10, status = '', search = '') => {
+    try {
+        const params = {
+            page,
+            limit
+        };
+
+        // Only attach status if it has a value and isn't 'all'
+        if (status && status !== 'all') {
+            params.status = status;
+        }
+
+        // Only attach search if it has a value
+        if (search) {
+            params.search = search;
+        }
+
+        // Request URL: /api/jobs/applications?page=1&limit=10&status=pending&search=...
+        
+        const response = await api.get(`/applications`, { params });
+        
+        return response.data; 
+    } catch (error) {
+        console.error("Service Error - Get All Apps:", error);
+        throw error;
+    }
 };
 
 export const reviewJobPerformance = async (jobId, payload) => {

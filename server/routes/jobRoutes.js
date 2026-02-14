@@ -29,7 +29,6 @@ router.put('/:jobId/unassign',verifyPermissions('jobs', 'edit'), jobController.u
 router.put('/:jobId/unreject',verifyPermissions('jobs', 'edit'), jobController.unrejectApplicant);
 router.put('/:jobId/shortlist',verifyPermissions('jobs', 'edit'), jobController.shortlistApplicant);
 router.put('/:jobId/unshortlist',verifyPermissions('jobs', 'edit'), jobController.undoShortlistApplicant);
-
 router.put('/:jobId/review', verifyPermissions('jobs', 'edit'), jobController.reviewJobPerformance);
 
 

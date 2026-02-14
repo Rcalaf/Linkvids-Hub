@@ -269,7 +269,6 @@ export default function AdminForm() {
                                                             type="radio" 
                                                             name={`perm-${module}`}
                                                             checked={formData.permissions[module] === level}
-                                                            // 🚨 7. Disable Radio Buttons if Self
                                                             disabled={isSelf}
                                                             onChange={() => handlePermChange(module, level)}
                                                             style={{ cursor: isSelf ? 'not-allowed' : 'pointer' }}

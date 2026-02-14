@@ -3,18 +3,16 @@ const Notification = require('../models/Notification');
 const Job = require('../models/Job');
 const mongoose = require('mongoose');
 
-
-// --- CREATE Job ---
+// --- 1. CREATE Job ---
 exports.createJob = async (req, res) => {
     try {
         const { 
             projectName, projectDescription, deliverables, 
             projectStartDate, projectEndDate, shootingDates,
             projectLanguage, targetRole, rate, imageRightsDuration,
-            positionsAvailable // <--- New Field
+            positionsAvailable 
         } = req.body;
 
-        // Basic validation
         if (!projectName || !targetRole || !rate) {
             return res.status(400).json({ message: 'Missing required fields (Name, Role, Rate).' });
         }
@@ -30,10 +28,11 @@ exports.createJob = async (req, res) => {
             targetRole,
             rate,
             imageRightsDuration,
-            positionsAvailable: positionsAvailable || 1, // Default to 1
+            positionsAvailable: positionsAvailable || 1,
             status: 'Open', 
             createdBy: req.user,
-            assignedTo: [] // Initialize empty array
+            assignedTo: [],
+            // rejectedApplicants removed (Single Source of Truth)
         });
 
         res.status(201).json({ message: 'Job created successfully', job: newJob });
@@ -43,39 +42,71 @@ exports.createJob = async (req, res) => {
     }
 };
 
-// --- FIND Jobs ---
+// --- 2. GET ALL JOBS (The Filter Logic) ---
 exports.getAllJobs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-        const currentUserId = req.user; 
-
+        
+        const currentUserId = req.user._id || req.user; 
         const { search, status, targetRole } = req.query;
+
+        
         let query = {};
 
-        // 1. BUILD QUERY
+        // --- FILTERING ---
         if (req.userType === 'LinkVidsAdmin') {
              if (status && status !== 'all') query.status = status;
              if (targetRole && targetRole !== 'all') query.targetRole = targetRole;
         } else {
             // Collaborator Logic
-            if (status === 'Applied') {
-                query['applicants.user'] = currentUserId; 
-            } else if (status === 'Assigned' || status === 'Completed') {
-                // Mongoose handles array queries automatically:
-                // This finds jobs where currentUserId is IN the assignedTo array
-                query.status = status;
-                query.assignedTo = currentUserId; 
-            } else {
-                query.status = 'Open'; 
-            }
-
             if (targetRole && targetRole !== 'all') {
                 query.targetRole = targetRole;
             }
+
+            switch (status) {
+                case 'Applied':
+                    // Any application record exists
+                    query['applicants.user'] = currentUserId;
+                    break;
+
+                case 'Shortlisted':
+                    // Job is Open AND User is Shortlisted
+                    query.status = 'Open';
+                    query.applicants = {
+                        $elemMatch: { user: currentUserId, status: 'shortlisted' }
+                    };
+                    break;
+
+                case 'Rejected':
+                     // ✅ CLEANER: Single source check
+                     query.applicants = {
+                        $elemMatch: { user: currentUserId, status: 'rejected' }
+                    };
+                    // query['applicants.user'] = currentUserId;
+                    // query['applicants.status'] = 'rejected';
+                    break;
+
+                case 'Assigned':
+                    // ✅ FAST: Use assignedTo array
+                    query.assignedTo = currentUserId;
+                    query.status = { $ne: 'Completed' }; 
+                    break;
+
+                case 'Completed':
+                    query.assignedTo = currentUserId;
+                    query.status = 'Completed';
+                    break;
+
+                case 'Open':
+                default:
+                    query.status = 'Open';
+                    break;
+            }
         }
 
+        // Search
         if (search) {
             query.$or = [
                 { projectName: { $regex: search, $options: 'i' } },
@@ -83,7 +114,6 @@ exports.getAllJobs = async (req, res) => {
             ];
         }
 
-        // 2. FETCH DATA
         const total = await Job.countDocuments(query);
 
         let jobs = await Job.find(query)
@@ -93,38 +123,44 @@ exports.getAllJobs = async (req, res) => {
             .populate('createdBy', 'name email')
             .lean(); 
 
-        // 3. CONDITIONAL DATA CLEANUP
+        // --- MAPPING & FLAGGING ---
         jobs = jobs.map(job => {
             const userIdStr = currentUserId.toString();
 
-            // A. Find the specific application object for this user
+            // 1. Check Assigned (Array)
+            const isAssignedToMe = job.assignedTo && job.assignedTo.some(id => 
+                id.toString() === userIdStr
+            );
+
+            // 2. Find My Application
             const myApplication = job.applicants && job.applicants.find(app => {
                 const appId = app.user ? app.user.toString() : app.toString();
                 return appId === userIdStr;
             });
 
-            // B. Calculate Flags
+            // 3. Flags
             const hasApplied = !!myApplication; 
-            
-            const isRejected = myApplication ? myApplication.status === 'rejected' : false;
-            
-            // Check specific status inside the applicant object
-            const isSelected = myApplication ? (myApplication.status === 'accepted') : false;
-            
-            const applicantCount = job.applicants ? job.applicants.length : 0;
+            const myAppStatus = myApplication ? myApplication.status : null;
+
+            // ✅ CLEANER: Direct status check
+            const isRejected = myAppStatus === 'rejected'; 
+            const isSelected = myAppStatus === 'accepted'; 
+            const isShortlisted = myAppStatus === 'shortlisted';
 
             const jobData = { 
                 ...job, 
                 hasApplied,
+                isAssignedToMe, 
                 isRejected,
                 isSelected,
-                applicantCount,
-                myApplicationStatus: myApplication ? myApplication.status : null 
+                isShortlisted,
+                myApplicationStatus: myAppStatus,
+                applicantCount: job.applicants ? job.applicants.length : 0
             };
 
             if (req.userType !== 'LinkVidsAdmin') {
                 delete jobData.applicants;
-                delete jobData.rejectedApplicants;
+                // delete jobData.rejectedApplicants; // Removed from schema, so no need to delete
             } 
             
             return jobData;
@@ -141,7 +177,7 @@ exports.getAllJobs = async (req, res) => {
     }
 };
 
-// --- READ ONE Job ---
+// --- 3. GET ONE JOB ---
 exports.getJobById = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -149,7 +185,7 @@ exports.getJobById = async (req, res) => {
 
         const jobDoc = await Job.findById(jobId)
             .populate('createdBy', 'username email companyName profile_picture')
-            .populate('assignedTo', 'username email'); // Populates the array of users
+            .populate('assignedTo', 'username email'); 
         
         if (!jobDoc) return res.status(404).json({ message: 'Job not found' });
 
@@ -175,15 +211,17 @@ exports.getJobById = async (req, res) => {
     }
 };
 
-// --- UPDATE Job ---
+// --- 4. UPDATE JOB ---
 exports.updateJob = async (req, res) => {
     try {
         const { jobId } = req.params;
         const updates = { ...req.body };
 
+        // Protect critical fields
         delete updates.applicants; 
         delete updates.createdBy; 
         delete updates._id;
+        delete updates.assignedTo; 
         
         const updatedJob = await Job.findByIdAndUpdate(
             jobId,
@@ -200,7 +238,7 @@ exports.updateJob = async (req, res) => {
     }
 };
 
-// --- DELETE Job ---
+// --- 5. DELETE JOB ---
 exports.deleteJob = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -208,31 +246,28 @@ exports.deleteJob = async (req, res) => {
 
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
+        // Notify applicants
         if (job.applicants && job.applicants.length > 0) {
             const applicantIds = job.applicants.map(app => app.user);
-
             const notifications = applicantIds.map(userId => ({
                 recipient: userId,
                 type: 'SYSTEM',
-                message: `The job "${job.projectName}" you applied for has been closed/removed.`,
+                message: `The job "${job.projectName}" has been closed/removed.`,
                 relatedJob: null, 
                 isRead: false
             }));
 
-            if (notifications.length > 0) {
-                await Notification.insertMany(notifications);
-            }
+            if (notifications.length > 0) await Notification.insertMany(notifications);
         }
 
         res.json({ message: 'Job deleted successfully' });
-
     } catch (error) {
         console.error("Delete Job Error:", error);
         res.status(500).json({ message: 'Delete failed' });
     }
 };
 
-// --- TOGGLE APPLICATION ---
+// --- 6. TOGGLE APPLICATION (Apply / Withdraw) ---
 exports.toggleApplication = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -246,14 +281,16 @@ exports.toggleApplication = async (req, res) => {
         );
 
         if (existingAppIndex !== -1) {
-            // WITHDRAW
+            // WITHDRAW: Remove completely from array
+            // This is cleaner than setting status='withdrawn' because if they apply again,
+            // we just push a fresh object.
             job.applicants.splice(existingAppIndex, 1);
             await job.save();
             return res.json({ message: 'Application withdrawn', hasApplied: false });
         } else {
             // APPLY
             if (job.status !== 'Open') {
-                return res.status(400).json({ message: 'This job is not accepting applications' });
+                return res.status(400).json({ message: 'Job is not accepting applications' });
             }
 
             job.applicants.push({
@@ -267,20 +304,21 @@ exports.toggleApplication = async (req, res) => {
             // Notify Admin
             const applicant = await BaseUser.findById(userId).select('username name'); 
             const applicantName = applicant ? (applicant.username || applicant.name) : 'A user';
+            
+            // Send to Admin (Optimize by finding only relevant admins if needed)
             const admins = await BaseUser.find({ userType: 'LinkVidsAdmin' }).select('_id');
-
             if (admins.length > 0) {
-                const adminNotifications = admins.map(admin => ({
+                const notes = admins.map(admin => ({
                     recipient: admin._id,
                     type: 'SYSTEM',
-                    message: `New Application: ${applicantName} has applied for "${job.projectName}".`,
+                    message: `New App: ${applicantName} applied for "${job.projectName}".`,
                     relatedJob: job._id,
                     isRead: false
                 }));
-                await Notification.insertMany(adminNotifications);
+                await Notification.insertMany(notes);
             }
 
-            return res.json({ message: 'Application submitted successfully', hasApplied: true });
+            return res.json({ message: 'Application submitted', hasApplied: true });
         }
 
     } catch (error) {
@@ -289,134 +327,7 @@ exports.toggleApplication = async (req, res) => {
     }
 };
 
-// --- GET COLLABORATOR STATS ---
-exports.getCollaboratorStats = async (req, res) => {
-    try {
-        const userId = req.user; 
-        const userObjectId = new mongoose.Types.ObjectId(userId);
-
-        const activeApplications = await Job.countDocuments({
-            applicants: userObjectId, 
-            status: 'Open'
-        });
-
-        const completedStats = await Job.aggregate([
-            {
-                $match: {
-                    // Check if user is in applicants with accepted status AND job is completed
-                    'applicants': { $elemMatch: { user: userObjectId, status: 'accepted' } },
-                    status: 'Completed'
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    count: { $sum: 1 },         
-                    totalEarnings: { $sum: "$rate" } 
-                }
-            }
-        ]);
-
-        const stats = {
-            activeApplications,
-            jobsCompleted: completedStats[0]?.count || 0,
-            totalEarnings: completedStats[0]?.totalEarnings || 0
-        };
-
-        res.json(stats);
-
-    } catch (error) {
-        console.error("Stats Error:", error);
-        res.status(500).json({ message: 'Failed to calculate stats' });
-    }
-};
-
-// --- GET ALL APPLICATIONS (ADMIN) ---
-exports.getAllApplications = async (req, res) => {
-    try {
-        const jobs = await Job.find({ 'applicants.0': { $exists: true } })
-            .select('projectName status applicants') 
-            .populate({
-                path: 'applicants.user',
-                select: 'name email profile_picture city country' 
-            })
-            .sort({ createdAt: -1 });
-
-        const allApplications = [];
-
-        jobs.forEach(job => {
-            job.applicants.forEach(app => {
-                if (app.user) {
-                    allApplications.push({
-                        jobId: job._id,
-                        jobTitle: job.projectName,
-                        jobStatus: job.status,
-                        applicationId: app._id,
-                        status: app.status, 
-                        appliedAt: app.appliedAt,
-                        coverNote: app.coverNote,
-                        rating: app.rating,
-                        ratingNote: app.ratingNote,
-                        candidateId: app.user._id,
-                        candidateName: app.user.name,
-                        candidateEmail: app.user.email,
-                        candidateAvatar: app.user.profile_picture,
-                        candidateLocation: app.user.city ? `${app.user.city}, ${app.user.country}` : 'Unknown'
-                    });
-                }
-            });
-        });
-
-        allApplications.sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
-        res.json(allApplications);
-
-    } catch (error) {
-        console.error("Fetch All Applications Error:", error);
-        res.status(500).json({ message: 'Failed to fetch applications' });
-    }
-};
-
-// --- GET APPLICANTS FOR A JOB ---
-exports.getJobApplicants = async (req, res) => {
-    try {
-        const { jobId } = req.params;
-        
-        const job = await Job.findById(jobId)
-            .populate({
-                path: 'applicants.user', 
-                select: 'name username email profile_picture collaboratorType city country' 
-            });
-
-        if (!job) return res.status(404).json({ message: 'Job not found' });
-
-        const applicantsList = job.applicants
-            .filter(app => app.user) 
-            .map(app => ({
-                _id: app._id,           
-                status: app.status,     
-                appliedAt: app.appliedAt,
-                coverNote: app.coverNote,
-                rating: app.rating,
-                ratingNote: app.ratingNote,
-                userId: app.user._id,
-                name: app.user.name,
-                username: app.user.username,
-                email: app.user.email,
-                profile_picture: app.user.profile_picture,  
-                collaboratorType: app.user.collaboratorType,
-                city: app.user.city,
-                country: app.user.country
-            }));
-
-        res.json(applicantsList);
-
-    } catch (error) {
-        console.error("Fetch Applicants Error:", error);
-        res.status(500).json({ message: 'Failed to fetch applicants' });
-    }
-};
-
-// --- ASSIGN JOB TO USER (MULTI-USER CAPABILITY) ---
+// --- 7. ASSIGN JOB (The Logic Hub) ---
 exports.assignJob = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -431,38 +342,34 @@ exports.assignJob = async (req, res) => {
             return res.status(404).json({ message: 'Job not found' });
         }
 
-        // 1. Check Positions Availability
         const maxPositions = job.positionsAvailable || 1;
-        // Count how many are currently accepted/assigned
         const currentHiredCount = job.applicants.filter(a => a.status === 'accepted').length;
 
         if (currentHiredCount >= maxPositions) {
             await session.abortTransaction();
-            return res.status(400).json({ message: `All ${maxPositions} positions have been filled.` });
+            return res.status(400).json({ message: `All ${maxPositions} positions filled.` });
         }
 
-        // 2. Find and Update Target Applicant
         const applicantToHire = job.applicants.find(
             app => app.user && app.user.toString() === userId.toString()
         );
 
         if (!applicantToHire) {
             await session.abortTransaction();
-            return res.status(400).json({ message: 'User has not applied to this job.' });
+            return res.status(400).json({ message: 'User has not applied.' });
         }
 
-        // Update status to 'accepted'
+        // 1. UPDATE STATUS
         applicantToHire.status = 'accepted'; 
         
-        // 3. Check if Job is NOW Full
-        // We add 1 because we just marked this person as accepted
+        // 2. CHECK IF JOB IS FULL
         const isNowFull = (currentHiredCount + 1) >= maxPositions;
         const rejectedIds = [];
 
         if (isNowFull) {
-            job.status = 'Assigned'; // Mark job as fully assigned
+            job.status = 'Assigned'; 
 
-            // Auto-reject remaining pending/shortlisted applicants
+            // ✅ CLEANER: Auto-reject others by status only
             job.applicants.forEach(app => {
                 if (app.status === 'pending' || app.status === 'shortlisted') {
                     app.status = 'rejected';
@@ -471,48 +378,42 @@ exports.assignJob = async (req, res) => {
             });
         }
         
-        // 🚨 UPDATE: Add to Array (Multi-User safe)
+        // 3. UPDATE FAST ACCESS ARRAY
         if (!job.assignedTo.includes(userId)) {
             job.assignedTo.push(userId);
         }
 
         await job.save({ session });
 
-        // 4. Notifications
+        // 4. NOTIFICATIONS
         const notifications = [];
-
-        // Notify Winner
+        // Winner
         notifications.push({
             recipient: userId,
             type: 'JOB_ASSIGNED',
-            message: `Congratulations! You have been selected for the project: "${job.projectName}".`,
-            relatedJob: job._id,
-            isRead: false
+            message: `Congratulations! You have been selected for: "${job.projectName}".`,
+            relatedJob: job._id
         });
 
-        // Notify Losers (Only if the job closed)
+        // Losers (If full)
         if (rejectedIds.length > 0) {
             rejectedIds.forEach(loserId => {
                 notifications.push({
                     recipient: loserId,
                     type: 'JOB_REJECTED',
-                    message: `Update on "${job.projectName}": The positions have been filled.`,
-                    relatedJob: job._id,
-                    isRead: false
+                    message: `Update on "${job.projectName}": Positions filled.`,
+                    relatedJob: job._id
                 });
             });
         }
 
-        if (notifications.length > 0) {
-            await Notification.insertMany(notifications, { session });
-        }
-
+        await Notification.insertMany(notifications, { session });
         await session.commitTransaction();
+        
         res.json({ message: 'Job assigned successfully', job, isFull: isNowFull });
 
     } catch (error) {
         await session.abortTransaction();
-        session.endSession();
         console.error("Assign Job Error:", error);
         res.status(500).json({ message: 'Failed to assign job' });
     } finally {
@@ -520,7 +421,7 @@ exports.assignJob = async (req, res) => {
     }
 };
 
-// --- REJECT APPLICANT ---
+// --- 8. REJECT APPLICANT (Manual) ---
 exports.rejectApplicant = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -535,6 +436,7 @@ exports.rejectApplicant = async (req, res) => {
 
         if (!app) return res.status(400).json({ message: 'User is not an applicant' });
 
+        // ✅ CLEANER: Just update status
         app.status = 'rejected';
 
         await job.save();
@@ -554,7 +456,7 @@ exports.rejectApplicant = async (req, res) => {
     }
 };
 
-// --- UNASSIGN JOB (Specific User) ---
+// --- 9. UNASSIGN JOB ---
 exports.unassignJob = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -563,30 +465,25 @@ exports.unassignJob = async (req, res) => {
         const job = await Job.findById(jobId);
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
-        if (!userId) {
-             return res.status(400).json({ message: 'User ID is required to unassign.' });
-        }
-
         const app = job.applicants.find(a => a.user && a.user.toString() === userId.toString());
 
         if (!app || (app.status !== 'accepted')) {
-             return res.status(400).json({ message: 'This user is not currently hired.' });
+             return res.status(400).json({ message: 'User is not currently hired.' });
         }
 
         // 1. Reset Status
         app.status = 'pending';
 
-        // 2. Re-Open Job if it was closed
-        // Since we just freed up a slot, the job is definitely not full anymore
+        // 2. Re-Open Job
         if (job.status === 'Assigned' || job.status === 'Completed') {
             job.status = 'Open';
         }
 
+        // 3. Remove from fast access array
         job.assignedTo.pull(userId);
         
         await job.save();
 
-        // 3. Notification
         await Notification.create({
             recipient: userId,
             type: 'SYSTEM',
@@ -602,6 +499,7 @@ exports.unassignJob = async (req, res) => {
     }
 };
 
+// --- 10. RESTORE APPLICANT (Un-reject) ---
 exports.unrejectApplicant = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -616,10 +514,12 @@ exports.unrejectApplicant = async (req, res) => {
 
         if (!app) return res.status(400).json({ message: 'User is not an applicant' });
 
+        // ✅ CLEANER: Just reset status
         app.status = 'pending';
 
         await job.save();
-
+        
+        // Notify user
         await Notification.create({
             recipient: userId,
             type: 'SYSTEM',
@@ -627,7 +527,7 @@ exports.unrejectApplicant = async (req, res) => {
             relatedJob: job._id
         });
 
-        res.json({ message: 'Applicant restored successfully', applicantId: userId });
+        res.json({ message: 'Applicant restored', applicantId: userId });
 
     } catch (error) {
         console.error("Unreject Error:", error);
@@ -635,6 +535,7 @@ exports.unrejectApplicant = async (req, res) => {
     }
 };
 
+// --- 11. SHORTLIST ---
 exports.shortlistApplicant = async (req, res) => {
     try {
         const { jobId } = req.params;
@@ -679,6 +580,89 @@ exports.undoShortlistApplicant = async (req, res) => {
     }
 };
 
+// --- 12. STATS & REVIEWS (Unchanged logic, just ensure consistency) ---
+exports.getCollaboratorStats = async (req, res) => {
+    try {
+        const userId = req.user; 
+        const userObjectId = new mongoose.Types.ObjectId(userId);
+
+        const activeApplications = await Job.countDocuments({
+            applicants: { $elemMatch: { user: userObjectId, status: 'pending' } }, 
+            status: 'Open'
+        });
+
+        const completedStats = await Job.aggregate([
+            {
+                $match: {
+                    // Check logic for 'accepted' status inside applicants
+                    'applicants': { $elemMatch: { user: userObjectId, status: 'accepted' } },
+                    status: 'Completed'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },         
+                    totalEarnings: { $sum: "$rate" } 
+                }
+            }
+        ]);
+
+        res.json({
+            activeApplications,
+            jobsCompleted: completedStats[0]?.count || 0,
+            totalEarnings: completedStats[0]?.totalEarnings || 0
+        });
+
+    } catch (error) {
+        console.error("Stats Error:", error);
+        res.status(500).json({ message: 'Failed to calculate stats' });
+    }
+};
+
+exports.getJobApplicants = async (req, res) => {
+    try {
+        const { jobId } = req.params;
+        
+        const job = await Job.findById(jobId)
+            .populate({
+                path: 'applicants.user', 
+                select: 'name username email profile_picture collaboratorType city country jobRatingStats' 
+            });
+
+        //console.log(job)
+
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+
+        const applicantsList = job.applicants
+            .filter(app => app.user) 
+            .map(app => ({
+                _id: app._id,           
+                status: app.status,     
+                appliedAt: app.appliedAt,
+                coverNote: app.coverNote,
+                rating: app.rating, 
+                ratingNote: app.ratingNote,
+                userAvgRating: app.user.jobRatingStats.average,
+                userCountRatings: app.user.jobRatingStats.count,
+                userId: app.user._id,
+                name: app.user.name,
+                username: app.user.username,
+                email: app.user.email,
+                profile_picture: app.user.profile_picture,  
+                collaboratorType: app.user.collaboratorType,
+                city: app.user.city,
+                country: app.user.country
+            }));
+
+        res.json(applicantsList);
+
+    } catch (error) {
+        console.error("Fetch Applicants Error:", error);
+        res.status(500).json({ message: 'Failed to fetch applicants' });
+    }
+};
+
 exports.reviewJobPerformance = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -687,22 +671,16 @@ exports.reviewJobPerformance = async (req, res) => {
         const { rating, feedback, userId } = req.body; 
         const jobId = req.params.jobId;
 
-        // 1. Validation
         if (!rating || rating < 1 || rating > 5) {
             return res.status(400).json({ message: 'Rating must be between 1 and 5' });
         }
-        if (!userId) {
-            return res.status(400).json({ message: 'User ID is required' });
-        }
 
-        // 2. Find Job
         const job = await Job.findById(jobId).session(session);
         if (!job) {
             await session.abortTransaction();
             return res.status(404).json({ message: 'Job not found' });
         }
 
-        // 3. Find the Applicant Subdocument
         const applicantEntry = job.applicants.find(
             app => app.user.toString() === userId.toString()
         );
@@ -712,19 +690,12 @@ exports.reviewJobPerformance = async (req, res) => {
             return res.status(404).json({ message: 'Applicant not found in this job' });
         }
 
-        // 4. Update the Applicant's Rating
         applicantEntry.rating = rating;
         applicantEntry.ratingNote = feedback;
         applicantEntry.ratedAt = new Date();
 
-        // 🚨 MULTI-USER CHECK: Only mark job as Completed if ALL hired users are done?
-        // For simplicity, we allow the admin to manually toggle Job Status. 
-        // We DO NOT force the whole job to 'Completed' here automatically 
-        // because other collaborators might still be working.
-        
         await job.save({ session });
 
-        // 5. AGGREGATION: Recalculate User's Average
         const stats = await Job.aggregate([
             { $unwind: "$applicants" }, 
             { 
@@ -742,7 +713,6 @@ exports.reviewJobPerformance = async (req, res) => {
             }
         ]).session(session);
 
-        // 6. Update User Profile
         if (stats.length > 0) {
             await BaseUser.findByIdAndUpdate(userId, {
                 'jobRatingStats.average': Math.round(stats[0].averageRating * 10) / 10,
@@ -751,17 +721,126 @@ exports.reviewJobPerformance = async (req, res) => {
         }
 
         await session.commitTransaction();
-        session.endSession();
-
-        res.json({ 
-            message: 'Applicant rated successfully', 
-            updatedApplicant: applicantEntry 
-        });
+        res.json({ message: 'Applicant rated successfully' });
 
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
         console.error("Review Job Error:", error);
         res.status(500).json({ message: 'Failed to save review' });
+    } finally {
+        session.endSession();
+    }
+};
+
+exports.getAllApplications = async (req, res) => {
+    try {
+        // 1. Extract Query Parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const status = req.query.status; // e.g., 'pending' or 'pending,shortlisted'
+        const search = req.query.search; // Optional: Search by candidate name or job title
+
+        const skip = (page - 1) * limit;
+
+        // 2. Build the Match Stage (Filter Logic)
+        let matchConditions = {};
+
+        // Filter by Status (supports comma separated: ?status=pending,shortlisted)
+        if (status && status !== 'All') {
+            const statuses = status.split(',');
+            matchConditions["applicants.status"] = { $in: statuses };
+        }
+
+        // Optional: Filter by Search Term (Regex)
+        if (search) {
+            const searchRegex = { $regex: search, $options: 'i' };
+            matchConditions.$or = [
+                { "projectName": searchRegex },
+                { "candidate.name": searchRegex },
+                { "candidate.email": searchRegex }
+            ];
+        }
+
+        // 3. Run Aggregation Pipeline
+        const result = await Job.aggregate([
+            // A. Pre-filter: Only look at jobs that actually have applicants
+            { $match: { 'applicants.0': { $exists: true } } },
+
+            // B. Unwind: Deconstruct the applicants array so each application is a document
+            { $unwind: "$applicants" },
+
+            // C. Join: Get Candidate Details from 'users' collection
+            {
+                $lookup: {
+                    from: "users", // ⚠️ Ensure this matches your actual MongoDB collection name for users (usually plural, lowercase)
+                    localField: "applicants.user",
+                    foreignField: "_id",
+                    as: "candidate"
+                }
+            },
+
+            // D. Flatten Candidate: Turn single-item array into object (exclude apps with deleted users)
+            { $unwind: "$candidate" },
+
+            // E. Apply Filters: Now we can filter by specific applicant status or candidate name
+            { $match: matchConditions },
+
+            // F. Sort: Newest applications first
+            { $sort: { "applicants.appliedAt": -1 } },
+
+            // G. Pagination Facet: Run count and data fetch in parallel
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [
+                        { $skip: skip },
+                        { $limit: limit },
+                        {
+                            $project: {
+                                jobId: "$_id",
+                                jobTitle: "$projectName",
+                                jobStatus: "$status",
+                                applicationId: "$applicants._id",
+                                status: "$applicants.status",
+                                appliedAt: "$applicants.appliedAt",
+                                coverNote: "$applicants.coverNote",
+                                candidateId: "$candidate._id",
+                                candidateName: { $ifNull: ["$candidate.name", "$candidate.username"] },
+                                candidateRating: { $ifNull: ["$candidate.jobRatingStats.average", 0] },
+                                candidateRatingCount: { $ifNull: ["$candidate.jobRatingStats.count", 0] },
+                                candidateEmail: "$candidate.email",
+                                candidateAvatar: "$candidate.profile_picture",
+                                candidateLocation: { 
+                                    $concat: [
+                                        { $ifNull: ["$candidate.city", ""] }, 
+                                        { $cond: [{ $and: ["$candidate.city", "$candidate.country"] }, ", ", ""] },
+                                        { $ifNull: ["$candidate.country", ""] }
+                                    ] 
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        ]);
+
+        // 4. Format Response
+        const data = result[0].data;
+        const total = result[0].metadata[0] ? result[0].metadata[0].total : 0;
+
+        res.json({
+            applications: data,
+            pagination: {
+                total,
+                page,
+                pages: Math.ceil(total / limit),
+                limit
+            }
+        });
+
+    } catch (error) {
+        console.error("Fetch Applications Error:", error);
+        res.status(500).json({ message: 'Failed to fetch applications' });
     }
 };
