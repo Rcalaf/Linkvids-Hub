@@ -44,6 +44,7 @@ exports.createJob = async (req, res) => {
 
 // --- 2. GET ALL JOBS (The Filter Logic) ---
 exports.getAllJobs = async (req, res) => {
+    
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -51,7 +52,6 @@ exports.getAllJobs = async (req, res) => {
         
         const currentUserId = req.user._id || req.user; 
         const { search, status, targetRole } = req.query;
-
         
         let query = {};
 
@@ -68,7 +68,10 @@ exports.getAllJobs = async (req, res) => {
             switch (status) {
                 case 'Applied':
                     // Any application record exists
-                    query['applicants.user'] = currentUserId;
+                    // query['applicants.user'] = currentUserId;
+                     query.applicants = {
+                        $elemMatch: { user: currentUserId, status: {$in: ['pending', 'viewed']}}
+                    };
                     break;
 
                 case 'Shortlisted':
