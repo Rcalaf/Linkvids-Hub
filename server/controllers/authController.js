@@ -244,10 +244,31 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const getUserProfile = async (req, res) => {
+    try {
+        // We use findById on the BaseUser to support ALL user types (Admin, Collaborator, Agency)
+        const user = await BaseUser.findById(req.user)
+            .select('-password -refreshToken') // Exclude sensitive fields
+            .lean(); // Faster performance since we don't need Mongoose methods
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Optional: formatting response if needed
+        res.json(user);
+        
+    } catch (error) {
+        console.error("Profile Fetch Error:", error);
+        res.status(500).json({ message: 'Server Error fetching profile' });
+    }
+};
+
 module.exports = {
     handleLogin,
     registerAgency,
     registerCollaborator,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    getUserProfile
 };

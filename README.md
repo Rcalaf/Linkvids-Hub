@@ -7,6 +7,7 @@ This guide outlines the step-by-step process to deploy the Linkvids Platform (Se
 1.  **VPS (Virtual Private Server):** Ubuntu 22.04 or 24.04 LTS (DigitalOcean, AWS EC2, Linode, etc.).
 2.  **Domain Name:** A domain pointing to your server's IP address.
 3.  **SSH Access:** Root or sudo user privileges.
+4.  **FireBase Project:** Set up Firebase project into Firebase conosle (Push Notifications Linkvids App).
 
 ---
 
@@ -564,3 +565,13 @@ Open your `.env` file on the server:
 
 ```bash
 nano .env
+```
+
+## Push Notifications - Linkvids Hub App (Optional): Set Up Firebase Project
+
+You need to initialize the Firebase Admin SDK to send messages.
+
+1. Go to Firebase Console > Project Settings > Service Accounts.
+2. Click "Generate new private key".
+3. Save the JSON file as serviceAccountKey.json in your backend root (add it to .gitignore!).
+

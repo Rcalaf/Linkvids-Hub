@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const BaseUser = require('../models/BaseUser');
 
 // --- GET MY NOTIFICATIONS ---
 exports.getMyNotifications = async (req, res) => {
@@ -80,5 +81,45 @@ exports.deleteNotification = async (req, res) => {
     } catch (error) {
         console.error("Delete Notif Error:", error);
         res.status(500).json({ message: 'Failed to delete notification' });
+    }
+};
+
+exports.registerPushToken = async (req, res) => {
+    try {
+        const { token } = req.body;
+        const userId = req.user;
+
+        if (!token) {
+            return res.status(400).json({ message: 'Token is required' });
+        }
+
+        // Add token to BaseUser.fcmTokens array using $addToSet (prevents duplicates)
+        await BaseUser.findByIdAndUpdate(userId, {
+            $addToSet: { fcmTokens: token }
+        });
+
+        console.log(`FCM Token registered for user ${userId}`);
+        res.json({ success: true, message: 'Token registered successfully' });
+
+    } catch (error) {
+        console.error("Register Token Error:", error);
+        res.status(500).json({ message: 'Failed to register token' });
+    }
+};
+
+exports.unregisterPushToken = async (req, res) => {
+    try {
+        const { token } = req.body;
+        const userId = req.user;
+
+        await BaseUser.findByIdAndUpdate(userId, {
+            $pull: { fcmTokens: token }
+        });
+
+        res.json({ success: true, message: 'Token removed' });
+
+    } catch (error) {
+        console.error("Unregister Token Error:", error);
+        res.status(500).json({ message: 'Failed to remove token' });
     }
 };

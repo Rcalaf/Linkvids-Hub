@@ -28,7 +28,7 @@ export default function Layout() {
             </main>
             
             <footer style={{ marginTop: '50px', paddingTop: '10px', borderTop: '1px solid #eee' }}>
-                <p className="text-muted text-center">© 2025 LinkVids Management. Admin Tools.</p>
+                <p className="text-muted text-center">© 2026 LinkVids Hub. Admin Tools.</p>
             </footer>
         </Container>
     );

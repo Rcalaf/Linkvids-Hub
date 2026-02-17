@@ -60,6 +60,15 @@ export default function Notifications() {
         }
     };
 
+    const getFallbackTitle = (type) => {
+        switch (type) {
+            case 'JOB_ASSIGNED': return 'Congratulations!';
+            case 'JOB_REJECTED': return 'Application Update';
+            case 'JOB_INVITE':   return 'New Opportunity'; // 🚨 Added to match App
+            default: return 'System Alert';
+        }
+    };
+
     if (loading) return <p className="text-center p-5">Loading notifications...</p>;
 
     return (
@@ -98,9 +107,10 @@ export default function Notifications() {
                                     <Col xs={10} md={11}>
                                         <div className="d-flex justify-content-between mb-1">
                                             <strong className={!note.isRead ? "text-dark" : "text-muted"}>
-                                                {note.type === 'JOB_ASSIGNED' ? 'Congratulations!' : 
+                                                {/* {note.type === 'JOB_ASSIGNED' ? 'Congratulations!' : 
                                                 note.type === 'JOB_REJECTED' ? 'Application Update' : 
-                                                'System Alert'}
+                                                'System Alert'} */}
+                                                {note.title || getFallbackTitle(note.type)}
                                             </strong>
                                             <div className="d-flex flex-column align-items-end ms-3">
                                                 <small className="text-muted mb-2" style={{ whiteSpace: 'nowrap' }}>

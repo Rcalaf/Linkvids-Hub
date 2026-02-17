@@ -7,6 +7,7 @@ node_modules
 .env.production
 .env.development
 *.local
+serviceAccountKey.json
 
 # --- Logs (From your list) ---
 logs

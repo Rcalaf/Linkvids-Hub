@@ -100,6 +100,11 @@ const baseUserSchema = new Schema({
         average: { type: Number, default: 0 },
         count: { type: Number, default: 0 }
     },
+    fcmTokens: {
+        type: [String],
+        default: [],
+        select: false // Optional: Keep hidden by default for security
+    },
     
 },
 {

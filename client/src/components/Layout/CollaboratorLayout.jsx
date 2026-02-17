@@ -24,7 +24,7 @@ export default function CollaboratorLayout() {
             </main>
             
             <footer className="mt-5 pt-3 border-top text-center text-muted">
-                <small>© 2025 LinkVids. All rights reserved.</small>
+                <small>© 2026 LinkVids. All rights reserved.</small>
             </footer>
         </Container>
     );
