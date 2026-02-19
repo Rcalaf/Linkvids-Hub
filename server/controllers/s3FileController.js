@@ -154,6 +154,10 @@ exports.handlePhotoDeletion = async (req, res) => {
     const { userId } = req.params;
     const { attributeSlug, photoPath } = req.body; 
 
+    console.log(attributeSlug)
+    console.log(photoPath)
+    console.log(userId)
+
     if (!attributeSlug || !photoPath || !mongoose.Types.ObjectId.isValid(userId)) return res.status(400).json({ message: 'Invalid params.' });
 
     try {

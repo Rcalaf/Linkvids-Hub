@@ -262,7 +262,7 @@ exports.updateExistingUser = async (req, res) => {
 
         // Handle Password Update
         if (password) {
-            console.log('we are updating password....')
+            //console.log('we are updating password....')
             user.password = await bcrypt.hash(password, 10);
         }
         

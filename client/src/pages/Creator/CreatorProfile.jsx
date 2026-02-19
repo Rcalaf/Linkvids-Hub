@@ -32,7 +32,7 @@ export default function CreatorProfile() {
     const [modalImage, setModalImage] = useState({ path: '', name: '' });
 
     useEffect(() => {
-        // 🚨 FIX: Only run if Auth is done loading AND we have a user 🚨
+        // Only run if Auth is done loading AND we have a user
         if (!authLoading && auth.user) {
             loadMyProfile();
         }
@@ -48,7 +48,7 @@ export default function CreatorProfile() {
   
             // 2. Fetch fresh data
             const [userData, configs, staticLists] = await Promise.all([
-                getUserById(currentUser), // Use ID from token
+                getUserById(currentUser),
                 getAllUserTypes(),
                 getStaticLists()
             ]);
@@ -82,9 +82,7 @@ export default function CreatorProfile() {
             };
             const updatedUser = await updateExistingUser(user._id, payload);
             setUser(updatedUser);
-            // Update local storage to keep header name fresh
-            // const currentStorage = auth.user._id;();
-            // localStorage.setItem('user', JSON.stringify({ ...currentStorage, ...updatedUser }));
+            
             updateUser(updatedUser);
             
             toast.success("Profile saved successfully!");
@@ -117,6 +115,7 @@ export default function CreatorProfile() {
         return user.groupSpecificAttributes ? user.groupSpecificAttributes[slug] : undefined;
     };
 
+    // 🚨 UPDATED RENDER VALUE TO HANDLE OBJECTS SAFELY 🚨
     const renderValue = (value, fieldType) => {
         if (value === null || value === undefined || value === "") return <span className="text-muted">Not set</span>;
         
@@ -124,22 +123,43 @@ export default function CreatorProfile() {
         if (fieldType === 'date') return new Date(value).toLocaleDateString();
         if (fieldType === 'url') return <a href={value} target="_blank" rel="noreferrer">{value} <FaExternalLinkAlt size={10} /></a>;
 
+        // --- HANDLE ARRAYS ---
         if (Array.isArray(value)) {
             if (fieldType === 'image_array') {
                  return (
                     <div className="d-flex flex-wrap gap-2">
-                        {value.map((item, i) => (
-                            <img key={i} src={item.path} alt="Gallery" 
-                                style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px', cursor: 'pointer' }} 
-                                onClick={() => { /* Add Lightbox Logic Here */ }}
-                            />
-                        ))}
+                        {value.map((item, i) => {
+                            // Safely extract image path
+                            const imgUrl = typeof item === 'object' ? item?.path : item;
+                            if (!imgUrl) return null;
+                            return (
+                                <img key={i} src={imgUrl} alt="Gallery" 
+                                    style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px', cursor: 'pointer' }} 
+                                    onClick={() => { /* Add Lightbox Logic Here */ }}
+                                />
+                            );
+                        })}
                         {value.length === 0 && <span className="text-muted">No images</span>}
                     </div>
                 );
             }
-            return value.map((v, i) => <Badge key={i} color="info" className="me-1" pill>{v}</Badge>);
+            
+            // Extract string if array contains objects (e.g., from react-select)
+            return value.map((v, i) => {
+                let displayText = v;
+                if (typeof v === 'object' && v !== null) {
+                    displayText = v.label || v.value || JSON.stringify(v);
+                }
+                return <Badge key={i} color="info" className="me-1" pill>{displayText}</Badge>;
+            });
         }
+        
+        // --- HANDLE SINGLE VALUES ---
+        // Extract string if single value is an object
+        if (typeof value === 'object' && value !== null) {
+            return String(value.label || value.value || JSON.stringify(value));
+        }
+
         return String(value);
     };
 
@@ -274,10 +294,8 @@ export default function CreatorProfile() {
                                 attributeSlug="profile_picture"
                                 attributeLabel="Main Photo"
                                 currentFiles={profilePicData}
-                                // onPhotosUpdate={handleProfilePicUpdate}
                                 onUpdate={handleProfilePicUpdate}
                                 mode="image"
-                                
                             />
                         ) : (
                             <div className="text-center">
@@ -301,7 +319,6 @@ export default function CreatorProfile() {
                         />
                     ) : (
                         /* In View Mode, galleries are rendered inside the main list loop above via renderValue */
-                        /* Optionally, you can render a dedicated gallery view here if preferred */
                         null
                     )}
                 </Col>
